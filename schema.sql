@@ -86,3 +86,20 @@ CREATE TABLE IF NOT EXISTS purchase_source_rows (
  line_id INTEGER NOT NULL REFERENCES purchase_lines(id), raw_json TEXT NOT NULL,
  PRIMARY KEY(import_id,row_number)
 );
+-- Reviews keep the original uploaded document and explicit user decisions.
+CREATE TABLE IF NOT EXISTS invoice_reviews (
+ id INTEGER PRIMARY KEY, document_sha256 TEXT NOT NULL, filename TEXT NOT NULL,
+ document BLOB NOT NULL, invoice_id INTEGER NOT NULL UNIQUE REFERENCES purchase_invoices(id),
+ reviewed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, decisions_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS supplier_product_mappings (
+ supplier_id INTEGER NOT NULL REFERENCES suppliers(id), product_number TEXT NOT NULL,
+ unit_of_measure TEXT NOT NULL, ppc TEXT NOT NULL, upc TEXT NOT NULL REFERENCES products(upc),
+ PRIMARY KEY(supplier_id,product_number,unit_of_measure,ppc)
+);
+CREATE TABLE IF NOT EXISTS catalog_candidates (
+ id INTEGER PRIMARY KEY, review_id INTEGER NOT NULL REFERENCES invoice_reviews(id),
+ line_number INTEGER NOT NULL, retail_upc TEXT NOT NULL, description TEXT NOT NULL,
+ supplier_product_number TEXT NOT NULL,
+ status TEXT NOT NULL DEFAULT 'Pending catalog setup', UNIQUE(review_id,line_number)
+);

@@ -1,11 +1,14 @@
 """Pricebook dashboard. Run with streamlit run dashboard.py."""
 from datetime import date
+from pathlib import Path
 import pandas as pd
 import streamlit as st
 from dashboard_data import (DATABASE, load_data, reconcile, sales_coverage,
                             SALES_DEPARTMENT_GROUPS, filter_sales_departments)
 
-st.set_page_config(page_title='Balport · Store dashboard',page_icon='📊',layout='wide')
+LOGO = Path(__file__).resolve().parent / 'logojpg.jpg'
+st.set_page_config(page_title='Bal-Port Liquors · Store dashboard',
+                   page_icon=str(LOGO) if LOGO.is_file() else 'B', layout='wide')
 st.markdown('''<style>
 .block-container {padding-top:2rem;max-width:1500px;}
 [data-testid="stMetric"] {background:#f1f5f9;border-radius:12px;padding:16px;}
@@ -17,10 +20,10 @@ st.markdown('''<style>
 }
 [data-testid="stSidebar"] [role="radiogroup"] > label:hover {background:#e2e8f0;}
 [data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked) {
-    background:#e2e8f0;border-color:#cbd5e1;
+    background:#e3f5f5;border-color:#61c4ca;
 }
 [data-testid="stSidebar"] [role="radiogroup"] > label:focus-within {
-    outline:2px solid #2563eb;outline-offset:2px;
+    outline:2px solid #167e85;outline-offset:2px;
 }
 </style>''',unsafe_allow_html=True)
 
@@ -35,9 +38,13 @@ data = cached_data(DATABASE.stat().st_mtime_ns)
 sales, products, inventory, invoices, lines = [data[k] for k in
     ['sales','products','inventory','invoices','purchase_lines']]
 
-navigation = ['Overview', 'Products', 'Inventory', 'Purchases', 'Data quality']
+navigation = ['Overview', 'Products', 'Inventory', 'Purchases',
+              'New Items Review', 'Data quality']
 with st.sidebar:
-    st.title('BALPORT')
+    if LOGO.is_file():
+        st.image(str(LOGO), width=220)
+    else:
+        st.title('Bal-Port Liquors')
     st.caption('Store dashboard')
     st.divider()
     page = st.radio('Navigate', navigation,
@@ -150,7 +157,8 @@ elif page == 'Products':
           'Download catalog','catalog')
     st.caption('Price is for price_qty units; source cost is for cost_qty units. Zero costs are not evidence of free goods. No profit estimate is inferred.')
     if not current.empty:
-        chosen=st.selectbox('Product history',current.upc.tolist(),format_func=lambda u: f'{u} · {products.loc[products.upc==u,"name"].iloc[0]}')
+        product_names=products.set_index('upc')['name'].to_dict()
+        chosen=st.selectbox('Product history',current.upc.tolist(),format_func=lambda u: f'{u} · {product_names[u]}')
         history=sales[sales.matched_upc==chosen]
         st.subheader('Daily product sales · exact UPC matches')
         if history.empty:
@@ -217,6 +225,10 @@ elif page == 'Purchases':
                 st.success('Invoice totals and exact decimal line sums agree for these documents.')
             else:
                 table(flagged,'Download reconciliation flags','reconciliation')
+
+elif page == 'New Items Review':
+    from invoice_review_ui import render_invoice_review
+    render_invoice_review()
 
 else:
     st.caption('Coverage, source files, and unresolved product links')

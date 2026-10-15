@@ -193,9 +193,9 @@ sum invoice headers once for purchasing totals and keep them separate from sales
 
 ## Dashboard
 
-Five pages provide sales trends and filters, product lookup and history, inventory
+Six pages provide sales trends and filters, product lookup and history, inventory
 comparison, supplier/invoice purchasing views, and data quality with CSV exports.
-The dashboard reads SQLite in read-only mode and does not modify imported data.
+Reporting pages read SQLite in read-only mode. New Items Review writes reviewed invoices only after explicit confirmation; existing imported data is preserved.
 It refreshes cached tables when the database file changes or when Refresh data is
 clicked. It intentionally omits profit, live inventory, and unique-order estimates
 because the current sources do not support them reliably.
@@ -257,3 +257,63 @@ NonAlcohol source departments are kept under All Unclassified Drinks.
 For all report rows, All Wine totals 808.69 on June 12 and 1,938.02 on June 13.
 New source department names remain individually selectable and should be reviewed
 for addition to the mapping when new exports are imported.
+
+
+## New Items Review: PDF and CSV invoice upload
+
+On Windows, update the application and install the new PDF dependency:
+
+```powershell
+git pull
+.\.venv\Scripts\python.exe -m pip install -r requirements.lock.txt
+.\.venv\Scripts\python.exe -m streamlit run dashboard.py
+```
+
+Choose **New Items Review** in the sidebar:
+
+1. Upload one invoice PDF, or a Fintech CSV and select one invoice from it.
+2. Check the invoice identity, dates, total, and extracted lines. All fields are
+   editable before analysis; the line grid supports pasted cells and added rows.
+3. Click **Check for new items**. Results distinguish catalog matches, suggestions,
+   potential new items, and unreadable codes. Purchase history is shown separately.
+4. Choose a decision for every line: link an existing catalog UPC, confirm a new
+   item with its retail UPC, or keep the line unlinked. An existing-product link
+   can optionally be remembered for this supplier item code, unit, and PPC.
+5. Check the original document, acknowledge any total difference, then explicitly
+   save. Only then are the invoice and lines added to Purchases.
+
+Original documents are stored as BLOBs in SQLite alongside an audit of reviewed
+values and decisions. Download them under Previously reviewed invoices. The
+existing upload checksum and supplier/store/invoice/date identity protect against
+repeat imports, including an invoice already imported through the Fintech CSV
+workflow. A review and all its purchase, mapping, and candidate records commit
+atomically. Mapping conflicts are rejected without partially saving an invoice.
+Repeated lines within a valid invoice are preserved.
+
+New-item confirmations appear in the pending catalog list and its CSV download.
+They do **not** create a priced catalog product: retail pricing, department, and
+unit-cost setup are still needed before adding them to the price book. Purchases
+are not treated as received stock. Document totals are counted once; no
+case-to-unit conversion or profit calculation is inferred.
+
+PDF extraction runs locally using pdfplumber, without an external AI service or
+credentials. It recognizes ruled tables with identifiable description, quantity,
+and amount headers. An actual supplier PDF sample has not yet been supplied;
+other layouts can require manual entry and verification. Scanned/image-only PDFs
+need manual entry or a Fintech CSV; OCR is not configured. Every PDF extraction is
+an editable draft, including codes, prices, pack sizes, and totals. A preview can
+show the PDF and extracted text. Uploaded files are limited to 20 MB and PDFs to
+100 pages. No document content is executed.
+
+Name similarity, pack barcodes, and historical supplier links are suggestions;
+only an exact retail UPC or an explicitly remembered supplier/pack mapping is
+linked automatically. Historical purchases with no catalog match remain distinct
+from genuinely new catalog candidates. Scientific notation, missing barcodes,
+and pack-vs-retail ambiguity require review.
+
+New records live in `invoice_reviews`, `supplier_product_mappings`, and
+`catalog_candidates`, alongside the existing purchase/import tables. The schema
+is created additively on first reviewed save; existing databases need no reset.
+Keep backups of `data/pricebook.sqlite3`: it now contains original uploaded
+invoices and user-confirmed mappings that rebuilding from the original CSVs
+alone cannot restore. These local records remain excluded from Git.
