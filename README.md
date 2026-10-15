@@ -298,8 +298,10 @@ case-to-unit conversion or profit calculation is inferred.
 
 PDF extraction runs locally using pdfplumber, without an external AI service or
 credentials. It recognizes ruled tables with identifiable description, quantity,
-and amount headers. An actual supplier PDF sample has not yet been supplied;
-other layouts can require manual entry and verification. Scanned/image-only PDFs
+and amount headers, plus the Fintech invoice-report layout with a ruled header
+and unruled, wrapped item rows. That layout is regression-tested against the
+supplied seven-line Breakthru invoice. Other layouts can require manual entry
+and verification. Scanned/image-only PDFs
 need manual entry or a Fintech CSV; OCR is not configured. Every PDF extraction is
 an editable draft, including codes, prices, pack sizes, and totals. A preview can
 show the PDF and extracted text. Uploaded files are limited to 20 MB and PDFs to
@@ -317,3 +319,24 @@ is created additively on first reviewed save; existing databases need no reset.
 Keep backups of `data/pricebook.sqlite3`: it now contains original uploaded
 invoices and user-confirmed mappings that rebuilding from the original CSVs
 alone cannot restore. These local records remain excluded from Git.
+
+
+### Fintech PDF layout and matching corrections
+
+The supported Fintech report fills supplier, bill-to retailer, invoice number,
+invoice date, due date, and total directly from labeled document fields. It uses
+the table header geometry to read body columns even when there are no vertical
+body rules, joins wrapped descriptions, and keeps PRICE separate from final TOTAL.
+CASE UPC is shown separately from retail UPC. Case codes remain unchanged in
+purchase provenance and the source barcode field when the reviewed invoice is saved.
+
+Items found in prior purchases but without a confirmed retail link are labeled
+**Previously purchased**, even if they are missing from the price book. They are
+not labeled potentially new merely because a case barcode differs from retail.
+Valid GS1 case barcodes can suggest a corresponding existing retail barcode by
+recomputing its check digit. These candidates still require user confirmation;
+case or pack relationships are never auto-linked from this conversion.
+Name suggestions require compatible brand, wine variety, and flavor tokens;
+for example, Merlot is not suggested for Pinot Noir, and watermelon is not
+suggested for an unflavored margarita description. Unknown source layouts and
+scans retain the editable/manual fallback.

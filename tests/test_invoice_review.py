@@ -201,3 +201,82 @@ class InvoiceReviewTests(unittest.TestCase):
             with sqlite3.connect(self.db) as con:
                 self.assertEqual(con.execute('SELECT count(*) FROM purchase_invoices').fetchone()[0],1)
                 self.assertEqual(con.execute('SELECT document FROM invoice_reviews').fetchone()[0],payload)
+
+    def test_real_fintech_pdf_extraction_and_historical_matches(self):
+        from decimal import Decimal
+        pdf=ROOT/'tests/fixtures/fintech_invoice.pdf'
+        result=extract_document(pdf.read_bytes(),pdf.name)
+        self.assertEqual(result['header'],dict(supplier='Breakthru Beverage California LLC',
+            retailer='Balport Liquor Store',invoice_number='0129249702',invoice_date='2026-10-09',
+            due_date='2026-11-08',invoice_total='633.12'))
+        self.assertEqual(len(result['lines']),7)
+        self.assertEqual([r['product_number'] for r in result['lines']],
+            ['9039439','9092415','9110002','9179061','9179063','9186491','9264126'])
+        self.assertEqual(result['lines'][0]['description'],'1800 TEQ ULT MARG RTD 1.75L')
+        self.assertEqual(result['lines'][1]['description'],'CUERVO AUTH MARG STRWB LME PET 12B 375ML')
+        self.assertEqual(result['lines'][-1]['description'],'LINE 39 RED BLEND EXCURSION 750ML')
+        self.assertEqual([r['extended_price'] for r in result['lines']],
+            ['80.16','42.48','127.08','153.36','76.68','76.68','76.68'])
+        self.assertTrue(all(not row['upc'] for row in result['lines']))
+        for row in result['lines']:
+            self.assertEqual(len(row['case_upc']),14)
+            self.assertEqual(Decimal(row['quantity'])*Decimal(row['unit_cost'])+
+                Decimal(row['discount'])+Decimal(row['adjustments']),Decimal(row['extended_price']))
+        header={**result['header'],'store_id':'000001','customer_id':''}
+        self.assertEqual(validate_review(header,result['lines'])[1],0)
+        for source in sorted((ROOT/'data/invoices').glob('*.csv')):
+            import_invoices(source,self.db)
+        matches=classify_lines(result['lines'],header['supplier'],self.db)
+        self.assertTrue(all(row['status']=='Previously purchased' for row in matches))
+        self.assertEqual([row['suggestions'].split(' — ')[0] for row in matches[1:]],
+            ['811538011129','080516406947','898756001057','898756001477','898756001231','898756001576'])
+        self.assertEqual(matches[0]['suggestions'],'')
+        self.assertTrue(all(row['action']=='Review needed' for row in matches))
+        # Persist the case barcode without inventing a retail link; use only this temporary DB.
+        decisions=[{**r,'action':'Keep unlinked','confirmed_upc':''} for r in matches]
+        saved=save_review(pdf.read_bytes(),pdf.name,header,decisions,database=self.db)
+        with sqlite3.connect(self.db) as con:
+            self.assertEqual(con.execute('SELECT source_upc FROM purchase_lines WHERE invoice_id=? ORDER BY line_number',
+                (saved['invoice_id'],)).fetchall(),[(r['case_upc'],) for r in result['lines']])
+            self.assertEqual(con.execute('SELECT total_cents FROM purchase_invoices WHERE id=?',(saved['invoice_id'],)).fetchone()[0],63312)
+
+    def test_case_gtin_candidates_require_valid_checksum_and_confirmation(self):
+        from invoice_review import case_retail_candidates,compatible_name
+        self.assertIn('898756001477',case_retail_candidates('10898756001474'))
+        self.assertEqual(case_retail_candidates('10898756001475'),set())
+        self.assertEqual(case_retail_candidates('6.0925E+11'),set())
+        from invoice_review import gs1_check_digit
+        variable_body='9089875600147'
+        self.assertEqual(case_retail_candidates(variable_body+gs1_check_digit(variable_body)),set())
+        self.assertFalse(compatible_name('LINE 39 P NOIR 750ML','Line 39 merlot 750ml'))
+        self.assertFalse(compatible_name('1800 TEQ ULT MARG RTD 1.75L','1800 TEQ ULT WATERMELON MARG RTD 1.75L'))
+        self.assertFalse(compatible_name('BANFI CHIANTI SUPERIORE 750ML','SANTA CRISTINA CHIANTI SUPERIORE 750ML'))
+        self.assertTrue(compatible_name('LINE 39 P NOIR 750ML','LINE 39 PINOT NOIR, 750 ml'))
+
+    def test_fintech_pdf_prefills_review_page(self):
+        from unittest.mock import patch
+        from streamlit.testing.v1 import AppTest
+        import invoice_review_ui
+        import hashlib
+        pdf=ROOT/'tests/fixtures/fintech_invoice.pdf'
+        class Uploaded:
+            name='invoice.pdf'
+            def getvalue(self):return pdf.read_bytes()
+        with patch.object(invoice_review_ui,'DATABASE',self.db),patch('streamlit.file_uploader',return_value=Uploaded()):
+            app=AppTest.from_file(str(ROOT/'dashboard.py'),default_timeout=30).run()
+            app.session_state['review_document']=hashlib.sha256(pdf.read_bytes()).hexdigest()
+            app.session_state['review_extracted']={'kind':'pdf','lines':[],'text':'old result','warnings':[]}
+            app.sidebar.radio[0].set_value('New Items Review').run()
+            self.assertEqual(len(app.exception),0)
+            values={item.label:item.value for item in app.text_input}
+            self.assertEqual(values['Invoice number'],'0129249702')
+            self.assertEqual(values['Invoice total (credits negative)'],'633.12')
+            self.assertEqual(values['Invoice date (YYYY-MM-DD)'],'2026-10-09')
+            self.assertEqual(values['Due date (YYYY-MM-DD, optional)'],'2026-11-08')
+            self.assertEqual(values['Retailer'],'Balport Liquor Store')
+            self.assertTrue(any(s.label=='Supplier' and s.value=='Breakthru Beverage California LLC' for s in app.selectbox))
+            source=next(frame.value for frame in app.dataframe if 'case_upc' in frame.value.columns)
+            self.assertEqual(len(source),7)
+            next(b for b in app.button if b.label=='Check for new items').click().run()
+            self.assertEqual(len(app.exception),0)
+            self.assertEqual(sum(int(metric.value) for metric in app.metric),7)

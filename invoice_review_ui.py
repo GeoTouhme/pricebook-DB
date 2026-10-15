@@ -9,7 +9,7 @@ from decimal import Decimal
 import pandas as pd
 import streamlit as st
 from dashboard_data import DATABASE
-from invoice_review import (LINE_FIELDS, ACTIONS, blank_line, extract_document,
+from invoice_review import (LINE_FIELDS, ACTIONS, EXTRACTION_VERSION, blank_line, extract_document,
     from_csv, classify_lines, validate_review, save_review)
 
 
@@ -51,19 +51,20 @@ def render_invoice_review(database=None):
         return
     payload=uploaded.getvalue()
     digest=hashlib.sha256(payload).hexdigest()
-    if st.session_state.get('review_document')!=digest:
+    document_key=f'{digest}:{EXTRACTION_VERSION}'
+    if st.session_state.get('review_document')!=document_key:
         try:extracted=extract_document(payload,uploaded.name)
         except Exception as exc:
             st.error(f'Could not read this document: {exc}')
             return
-        st.session_state.review_document=digest
+        st.session_state.review_document=document_key
         st.session_state.review_extracted=extracted
         st.session_state.pop('review_preview',None)
     extracted=st.session_state.review_extracted
     for warning in extracted['warnings']:st.warning(warning)
     defaults={'supplier':'','retailer':'Balport Liquor Store','customer_id':'','store_id':'000001',
               'invoice_number':'','invoice_date':'','due_date':'','invoice_total':''}
-    token=digest
+    token=document_key
     if extracted['kind']=='csv':
         groups=defaultdict(list)
         for r in extracted['records']:
@@ -77,6 +78,7 @@ def render_invoice_review(database=None):
             return
         token+=hashlib.sha256(json.dumps(selected).encode()).hexdigest()[:12]
     else:
+        defaults.update(extracted.get('header',{}))
         raw_lines=extracted['lines'] or [blank_line()]
         st.download_button('Download original PDF',payload,uploaded.name,'application/pdf')
         if st.checkbox('Show PDF beside the review'):
@@ -126,11 +128,11 @@ def render_invoice_review(database=None):
         return
     st.subheader('3. Review product matches')
     result=pd.DataFrame(preview['rows'])
-    cols=st.columns(4)
-    for col,status in zip(cols,['Existing item','Possible match','Potential new item','Unreadable code']):
+    cols=st.columns(5)
+    for col,status in zip(cols,['Existing item','Previously purchased','Possible match','Potential new item','Unreadable code']):
         col.metric(status,int(result.status.eq(status).sum()))
-    st.caption('Purchase history distinguishes previously purchased items from catalog matches. A possible match is a suggestion, not a link. Confirm new items with a retail UPC; case barcodes and supplier codes are preserved separately.')
-    st.dataframe(result[['product_number','upc','description','quantity','unit_cost','unit_of_measure','ppc',
+    st.caption('Case UPC is kept separate from the retail UPC. Case-to-retail barcode candidates require confirmation. Previously purchased means the item was bought before but still needs a catalog link. Purchase history distinguishes previously purchased items from catalog matches. A possible match is a suggestion, not a link. Confirm new items with a retail UPC; case barcodes and supplier codes are preserved separately.')
+    st.dataframe(result[['product_number','upc','case_upc','description','quantity','unit_cost','unit_of_measure','ppc',
         'extended_price','status','purchase_history','reason','suggestions']],hide_index=True,width='stretch')
     st.download_button('Download match report',result.to_csv(index=False).encode('utf-8-sig'),
         'invoice_match_review.csv','text/csv')

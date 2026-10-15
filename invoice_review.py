@@ -15,10 +15,11 @@ from dashboard_data import ROOT, DATABASE
 from import_invoices import HEADERS, cents, iso, numeric
 
 LINE_FIELDS = ['product_number','upc','description','quantity','unit_cost',
-               'unit_of_measure','ppc','pack_upc','adjustments','discount','extended_price']
+               'unit_of_measure','ppc','pack_upc','adjustments','discount','extended_price','case_upc']
 CSV_FIELDS = dict(zip(LINE_FIELDS, ['Product Number','UPC Number','Product Description',
     'Quantity','Unit Cost','Unit of Measure','PPC','Pack UPC','Total Adjustments',
     'Total Discount','Extended Price']))
+EXTRACTION_VERSION = 2
 ACTIONS = ['Review needed','Link existing product','Confirm new item','Keep unlinked']
 
 
@@ -57,12 +58,22 @@ def extract_document(payload, filename):
     if not filename.lower().endswith('.pdf') or not payload.startswith(b'%PDF-'):
         raise ValueError('Choose a PDF or a Fintech CSV export')
     import pdfplumber
-    text=[]; lines=[]; warnings=[]
+    from fintech_pdf import extract_page, extract_header
+    text=[]; lines=[]; warnings=[]; header={}
     with pdfplumber.open(io.BytesIO(payload)) as pdf:
         if len(pdf.pages)>100:
             raise ValueError('Upload at most 100 pages at a time')
         for page in pdf.pages:
-            text.append(page.extract_text() or '')
+            page_text=page.extract_text() or ''
+            text.append(page_text)
+            fintech_lines=extract_page(page)
+            if fintech_lines is not None:
+                values=extract_header(page_text,page)
+                if header.get('invoice_number') and values.get('invoice_number',header['invoice_number'])!=header['invoice_number']:
+                    raise ValueError('This PDF contains multiple invoices; upload each invoice separately')
+                header.update(values)
+                lines.extend({**blank_line(),**line} for line in fintech_lines)
+                continue
             for table in page.extract_tables():
                 mapping=None
                 for cells in table:
@@ -82,7 +93,7 @@ def extract_document(payload, filename):
         warnings.append('No supported line table was found. Read the extracted text and enter the invoice lines below.')
     else:
         warnings.append('PDF table extraction is a draft. Check every line, totals, and identifiers against the original PDF; remove subtotals or repeated headers.')
-    return {'kind':'pdf','lines':lines,'text':content,'warnings':warnings}
+    return {'kind':'pdf','lines':lines,'text':content,'warnings':warnings,'header':header}
 
 
 def from_csv(records):
@@ -112,6 +123,44 @@ def read_history(database=DATABASE):
     return products,history,mappings,candidates
 
 
+def gs1_check_digit(body):
+    return str((-sum(int(d)*(3 if i%2==0 else 1) for i,d in enumerate(body[::-1])))%10)
+
+
+def case_retail_candidates(barcode):
+    # A valid case GTIN supplies a candidate retail identity, never an automatic link.
+    if not re.fullmatch(r'[0-9]{14}',barcode) or barcode[0]=='9' or gs1_check_digit(barcode[:-1])!=barcode[-1]:
+        return set()
+    body=barcode[1:-1]
+    ean=body+gs1_check_digit(body)
+    return {ean,ean[1:]} if ean.startswith('0') else {ean}
+
+
+def name_tokens(name):
+    text=name.casefold()
+    substitutions={r'\bp\s+noir\b':'pinot_noir',r'\bpinot\s+noir\b':'pinot_noir',
+        r'\bpinot\s+grigio\b':'pinot_grigio',r'\bcab\s+sauv\b':'cabernet',
+        r'\bcabernet\s+sauvignon\b':'cabernet',r'\bsauvignon\s+blanc\b':'sauvignon_blanc',
+        r'\bred\s+blend\b':'red_blend',r'\bteq\b':'tequila',r'\bmarg\b':'margarita',
+        r'\bstrwb\b':'strawberry',r'\blme\b':'lime'}
+    for pattern,replacement in substitutions.items():text=re.sub(pattern,replacement,text)
+    return re.findall(r'[a-z0-9_]+',text)
+
+
+def compatible_name(source,candidate):
+    source_words=name_tokens(source);target=set(name_tokens(candidate));words=set(source_words)
+    if not source_words:return False
+    brand=source_words[0]
+    if len(brand)>=3 and brand not in target:return False
+    varieties={'cabernet','merlot','pinot_noir','pinot_grigio','chardonnay',
+               'sauvignon_blanc','red_blend','rose','rosé'}
+    if words & varieties and target & varieties and words & varieties != target & varieties:return False
+    flavors={'watermelon','strawberry','pineapple','peach','mango','apple','raspberry',
+             'blueberry','coconut','cherry','grapefruit','orange','lemon','lime'}
+    if target & flavors != words & flavors:return False
+    return True
+
+
 def classify_lines(lines,supplier,database=DATABASE):
     products,history,mappings,candidates=read_history(database)
     catalog={p['upc']:p['name'] for p in products}
@@ -124,8 +173,9 @@ def classify_lines(lines,supplier,database=DATABASE):
     result=[]
     for line in lines:
         upc=line['upc'].strip(); code=line['product_number'].strip()
+        source_barcode=upc or line.get('case_upc','').strip()
         scope=(supplier,code,line['unit_of_measure'].strip(),line['ppc'].strip())
-        prior=[r for r in history if (upc and r['upc']==upc) or
+        prior=[r for r in history if (source_barcode and r['upc']==source_barcode) or
                (code and r['supplier']==supplier and r['product_number']==code)]
         same_supplier=any(r['supplier']==supplier for r in prior)
         suggestions=set()
@@ -134,6 +184,8 @@ def classify_lines(lines,supplier,database=DATABASE):
                 suggestions.add(old['matched_upc'])
         for barcode in [upc,line['pack_upc'].strip()]:
             if barcode in catalog:suggestions.add(barcode)
+        for barcode in [line.get('case_upc','').strip(),upc]:
+            suggestions.update(case_retail_candidates(barcode) & catalog.keys())
         mapped=saved.get(scope) if code else None
         conflict=mapped and upc in catalog and mapped!=upc
         if conflict:
@@ -151,14 +203,17 @@ def classify_lines(lines,supplier,database=DATABASE):
                     for candidate in word_index.get(word,()):votes[candidate]+=1
                 shortlist=sorted(votes,key=lambda u:(-votes[u],u))[:150]
                 scores=sorted(((SequenceMatcher(None,name,catalog[u].casefold()).ratio(),u)
-                    for u in shortlist),reverse=True)
+                    for u in shortlist if compatible_name(line['description'],catalog[u])),reverse=True)
                 suggestions.update(u for score,u in scores[:3] if score>=0.72)
             if suggestions:
                 status='Possible match';reason='Candidate only: confirm barcode, product, and pack size'
-            elif not upc or not re.fullmatch(r'[0-9]{8}|[0-9]{12,14}',upc):
+            elif not source_barcode or not re.fullmatch(r'[0-9]{8}|[0-9]{12,14}',source_barcode):
                 status='Unreadable code';reason='Missing or nonstandard barcode; check the PDF'
             else:
                 status='Potential new item';reason='No confirmed catalog match'
+        if prior and not match and not conflict and status!='Unreadable code':
+            status='Previously purchased'
+            reason='Seen in purchase history; retail catalog link needs confirmation'
         if upc in candidate_upcs:
             if status=='Potential new item':status='Possible match'
             reason+='; already on the pending new-item list'
@@ -263,7 +318,7 @@ def save_review(payload,filename,header,decisions,acknowledge_difference=False,d
                 (invoice_id,line_number,product_number,source_upc,pack_upc,matched_upc,description,
                  quantity,unit_cost,unit_of_measure,ppc,adjustments_cents,discount_cents,extended_price,gl_code)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-                (invoice,index,row['product_number'],row['upc'],row['pack_upc'],linked,row['description'],
+                (invoice,index,row['product_number'],row['upc'] or row['case_upc'],row['pack_upc'],linked,row['description'],
                  row['quantity'],row['unit_cost'],row['unit_of_measure'],row['ppc'],cents(row['adjustments']),
                  cents(row['discount']),row['extended_price'],'')).lastrowid
             db.execute('INSERT INTO purchase_source_rows VALUES (?,?,?,?,?)',
