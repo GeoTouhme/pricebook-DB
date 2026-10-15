@@ -5,6 +5,7 @@ import pandas as pd
 import streamlit as st
 from sidebar_style import sidebar_css
 from animated_number import install_animated_numbers
+from theme_style import install_theme_support
 from dashboard_data import (DATABASE, load_data, reconcile, sales_coverage,
                             SALES_DEPARTMENT_GROUPS, filter_sales_departments)
 
@@ -13,11 +14,12 @@ st.set_page_config(page_title='Bal-Port Liquors · Store dashboard',
                    page_icon=str(LOGO) if LOGO.is_file() else 'B', layout='wide')
 st.markdown('''<style>
 .block-container {padding-top:2rem;max-width:1500px;}
-[data-testid="stMetric"] {background:#f1f5f9;border-radius:12px;padding:16px;}
-[data-testid="stMetricLabel"], [data-testid="stMetricValue"] {color:#172554;}
+[data-testid="stMetric"] {background:var(--dashboard-card, #f1f5f9);border-radius:12px;padding:16px;}
+[data-testid="stMetricLabel"], [data-testid="stMetricValue"] {color:var(--dashboard-text, #172554);}
 </style>''',unsafe_allow_html=True)
 
 install_animated_numbers()
+install_theme_support()
 
 @st.cache_data(show_spinner=False)
 def cached_data(stamp):
@@ -51,6 +53,7 @@ with st.sidebar:
         label_visibility='collapsed', key='navigation')
     with st.container(key='sidebar_details'):
         st.divider()
+        st.caption('Appearance: ⋮ → Settings → Theme → Light, Dark, or Use system setting.')
         with st.expander('Data summary'):
             st.caption(f'{len(products):,} catalog products · {len(invoices):,} invoices / credits')
             if not sales.empty:

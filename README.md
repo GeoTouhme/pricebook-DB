@@ -443,3 +443,11 @@ verify it. A due date is left empty when none is supplied. Supplier metadata,
 barcode provenance, excluded lines, and payment summary are stored with the review
 and original PDF. Tests exercise the supplied document through extraction,
 matching, reviewed saving, duplicate rejection, and the dashboard receipt.
+
+### Dashboard appearance
+
+Open the top-right **⋮ → Settings** menu and select **Dark**, **Light**, or
+**Use system setting** under “Choose app theme, colors and fonts.” Streamlit
+remembers the selection in this browser. **Custom Theme** restores the original
+blue and white palette. Charts, tables, inputs, the sidebar, and statistic cards
+follow the selected theme; navigation and animated counters keep their behavior.
