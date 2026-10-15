@@ -324,3 +324,60 @@ class InvoiceReviewTests(unittest.TestCase):
         with sqlite3.connect(self.db) as con:
             self.assertEqual(con.execute('SELECT matched_upc FROM purchase_lines WHERE id=?',(lid,)).fetchone()[0],correct)
             self.assertEqual(con.execute('SELECT matched_upc FROM purchase_lines WHERE invoice_id=?',(saved['invoice_id'],)).fetchone()[0],'499733700064')
+
+    def test_five_page_pdf_reassembles_wrapped_pack_and_adjacent_cells(self):
+        from decimal import Decimal
+        import re
+        pdf=ROOT/'tests/fixtures/fintech_wrapped_pack_invoice.pdf'
+        result=extract_document(pdf.read_bytes(),pdf.name)
+        self.assertEqual(result['header']['invoice_number'],'100986029')
+        self.assertEqual(result['header']['invoice_total'],'7014.88')
+        self.assertEqual(len(result['lines']),81)
+        first=result['lines'][0]
+        self.assertEqual(first['pack_upc'],'00070897013315')
+        self.assertEqual(first['upc'],'070897013315')
+        self.assertEqual(first['case_upc'],'00070897013353')
+        self.assertTrue(all(re.fullmatch(r'[0-9]{14}',row['pack_upc']) for row in result['lines']))
+        self.assertTrue(all(re.fullmatch(r'[0-9]{12}',row['upc']) for row in result['lines']))
+        indexed={row['product_number']:row for row in result['lines']}
+        self.assertEqual(len(indexed),81)
+        self.assertEqual(indexed['61212']['quantity'],'14.00')
+        self.assertEqual(indexed['61212']['pack_upc'],'00033544001820')
+        self.assertEqual(indexed['64438']['case_upc'],'00033544002346')
+        self.assertEqual(indexed['64438']['pack_upc'],'00033544002339')
+        self.assertEqual(indexed['71940']['upc'],'033544002933')
+        self.assertEqual(indexed['67653']['description'],'HIGH NOON VODKA PEACH C12 700ML')
+        self.assertEqual(indexed['67653']['case_upc'],'30085000034492')
+        self.assertEqual(indexed['10436']['description'],'SAM ADAMS OCTOBERFEST B24 12OZ 6P')
+        self.assertEqual(sum(Decimal(row['extended_price']) for row in result['lines']),Decimal('7014.88'))
+        for row in result['lines']:
+            self.assertEqual(Decimal(row['quantity'])*Decimal(row['unit_cost'])+
+                Decimal(row['discount'])+Decimal(row['adjustments']),Decimal(row['extended_price']))
+        self.assertEqual(validate_review({**result['header'],'store_id':'000001'},result['lines'])[1],0)
+
+    def test_wrapped_pack_pdf_ui_refreshes_old_truncated_extraction(self):
+        from unittest.mock import patch
+        from streamlit.testing.v1 import AppTest
+        import hashlib
+        import invoice_review_ui
+        pdf=ROOT/'tests/fixtures/fintech_wrapped_pack_invoice.pdf'
+        class Uploaded:
+            name='invoice-report.pdf'
+            def getvalue(self):return pdf.read_bytes()
+        with patch.object(invoice_review_ui,'DATABASE',self.db),patch('streamlit.file_uploader',return_value=Uploaded()):
+            app=AppTest.from_file(str(ROOT/'dashboard.py'),default_timeout=30).run()
+            app.session_state['review_document']=hashlib.sha256(pdf.read_bytes()).hexdigest()+':3'
+            app.session_state['review_extracted']={'kind':'pdf','lines':[{**blank_line(),'pack_upc':'0007089701'}],
+                'text':'old truncated result','warnings':[]}
+            app.sidebar.radio[0].set_value('New Items Review').run()
+            self.assertEqual(len(app.exception),0)
+            source=next(frame.value for frame in app.dataframe if 'pack_upc' in frame.value.columns)
+            self.assertEqual(len(source),81)
+            self.assertEqual(source.iloc[0].pack_upc,'00070897013315')
+            next(b for b in app.button if b.label=='Check for new items').click().run()
+            self.assertEqual(len(app.exception),0)
+            matches=next(frame.value for frame in app.dataframe if 'suggestions' in frame.value.columns)
+            self.assertEqual(matches.iloc[0].upc,'070897013315')
+            self.assertEqual(sum(int(metric.value) for metric in app.metric),81)
+            with sqlite3.connect(self.db) as con:
+                self.assertEqual(con.execute('SELECT count(*) FROM purchase_invoices').fetchone()[0],0)

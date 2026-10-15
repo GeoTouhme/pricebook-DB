@@ -20,7 +20,7 @@ LINE_FIELDS = ['product_number','upc','description','quantity','unit_cost',
 CSV_FIELDS = dict(zip(LINE_FIELDS, ['Product Number','UPC Number','Product Description',
     'Quantity','Unit Cost','Unit of Measure','PPC','Pack UPC','Total Adjustments',
     'Total Discount','Extended Price']))
-EXTRACTION_VERSION = 3
+EXTRACTION_VERSION = 4
 ACTIONS = ['Review needed','Link existing product','Confirm new item','Keep unlinked']
 
 

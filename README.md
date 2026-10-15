@@ -367,3 +367,19 @@ explicitly reviewed invoice links, raw source values, quantities, and monetary
 amounts are preserved. The cloud setup script also runs this refresh step.
 The seven-line sample PDF has no PACK UPC values, so its rows need review or a
 confirmed supplier mapping; the app does not substitute its populated CASE UPCs.
+
+### Wrapped PACK UPCs in multi-page PDFs
+
+The Fintech parser reassembles barcode fragments within each item before applying
+12-digit normalization. For example, a PACK UPC printed as `0007089701` followed
+by `3315` on the next line is read as `00070897013315`, then matched as
+`070897013315`. It assigns characters to header-defined columns before forming
+words, preventing touching CASE/PACK, PACK/quantity, and description/CASE text
+from merging into the wrong field. CASE UPC remains reference-only.
+
+The supplied five-page Harbor report is regression-tested for all 81 lines,
+including zero quantities, wrapped descriptions, full PACK UPCs, a quantity of
+14 beside a barcode, and exact reconciliation to 7,014.88. Saved extraction
+sessions are versioned so pre-fix truncated results are read again after updating.
+This correction affects extraction and does not post the sample invoice or alter
+previously saved invoices; any previously saved incorrect values require review.

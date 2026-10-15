@@ -2,6 +2,7 @@
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 import re
+from pdfplumber.utils import extract_text
 
 HEADERS = ['PRODUCT #','DESCRIPTION','CASE UPC','PACK UPC','QTY','U/M','PPC',
            'PRICE','SUBTOTAL','DISC','ADJ','TOTAL']
@@ -54,25 +55,33 @@ def extract_page(page):
         if names!=HEADERS:continue
         cells=table.rows[0].cells
         if any(cell is None for cell in cells):continue
+        # Segment characters before forming words: PDF text may join adjacent cells
+        # (CASE/PACK, PACK/QTY, or description/CASE) into a single extracted word.
         groups=[]
-        for word in sorted(page.extract_words(),key=lambda w:(w['top'],w['x0'])):
-            if word['top']<=table.rows[0].bbox[3]:continue
-            if not groups or abs(groups[-1][0]['top']-word['top'])>2:groups.append([])
-            groups[-1].append(word)
+        for char in sorted(page.chars,key=lambda c:(c['top'],c['x0'])):
+            if char['top']<=table.rows[0].bbox[3]:continue
+            if not groups or abs(groups[-1][0]['top']-char['top'])>2:groups.append([])
+            groups[-1].append(char)
         lines=[];current=None
-        for words in groups:
+        for chars in groups:
             columns=[]
-            for cell in cells:
-                selected=[w for w in words if cell[0]<= (w['x0']+w['x1'])/2 < cell[2]]
-                columns.append(' '.join(w['text'] for w in sorted(selected,key=lambda w:w['x0'])))
+            for index,cell in enumerate(cells):
+                selected=[c for c in chars if cell[0]<= (c['x0']+c['x1'])/2 < cell[2]]
+                if FIELDS[index] in {'case_upc','pack_upc'}:
+                    value=''.join(c['text'] for c in sorted(selected,key=lambda c:c['x0']) if not c['text'].isspace())
+                else:
+                    value=extract_text(selected,x_tolerance=2,y_tolerance=2).strip() if selected else ''
+                columns.append(value)
             row=dict(zip(FIELDS,columns))
             if re.fullmatch(r'[A-Za-z0-9-]{4,}',row['product_number']) and row['quantity'] and row['extended_price']:
                 current={k:amount(v) if k in {'quantity','ppc','unit_cost','discount','adjustments','extended_price'} else v
                          for k,v in row.items() if k!='subtotal'}
-                current['upc']=''  # CASE UPC is a packaging identifier, not a retail UPC.
+                current['upc']=''  # The review normalizes only PACK UPC after all fragments are joined.
                 lines.append(current)
-            elif current and row['description'] and not any(v for k,v in row.items() if k!='description'):
-                current['description']+=' '+row['description']
+            elif current and any(row.values()) and not any(
+                    value for field,value in row.items() if field not in {'description','case_upc','pack_upc'}):
+                if row['description']:current['description']+=' '+row['description']
+                for field in ['case_upc','pack_upc']:current[field]+=row[field]
             else:
                 current=None
         return lines
