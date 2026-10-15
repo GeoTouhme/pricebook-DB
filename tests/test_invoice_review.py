@@ -449,3 +449,88 @@ class InvoiceReviewTests(unittest.TestCase):
             self.assertTrue(any('database is locked' in error.value for error in app.error))
             with sqlite3.connect(self.db) as con:
                 self.assertEqual(con.execute('SELECT count(*) FROM purchase_invoices').fetchone()[0],0)
+
+    def test_mercaso_extracts_only_fulfilled_items_and_charged_total(self):
+        from mercaso_pdf import upce_to_upca
+        self.assertEqual(upce_to_upca('00985234'),'009800000524')
+        with self.assertRaises(ValueError):upce_to_upca('00985235')
+        pdf=ROOT/'tests/fixtures/mercaso_invoice.pdf'
+        result=extract_document(pdf.read_bytes(),pdf.name)
+        header=result['header']
+        self.assertEqual(header['supplier'],'Mercaso, Inc.')
+        self.assertEqual(header['invoice_number'],'M-303112')
+        self.assertEqual(header['invoice_date'],'2026-10-11')
+        self.assertEqual(header['retailer'],'Bal-Port Liquors')
+        self.assertEqual(header['invoice_total'],'27.49')
+        self.assertEqual(header['paid'],'27.49')
+        self.assertEqual(header['amount_due'],'0.00')
+        self.assertEqual(header['due_date'],'')
+        self.assertEqual(header['source_info']['date_basis'],'Order Date')
+        self.assertTrue(any('Order Date' in text for text in result['warnings']))
+        excluded=header['source_info']['excluded_lines']
+        self.assertEqual(len(excluded),1)
+        self.assertEqual(excluded[0]['product_number'],'DW167380-1')
+        self.assertEqual(excluded[0]['quantity'],'7')
+        self.assertEqual(excluded[0]['amount'],'23.03')
+        self.assertEqual(len(result['lines']),1)
+        line=result['lines'][0]
+        self.assertEqual(line['description'],'Kinder Joy, Eggs (20 Pack)')
+        self.assertEqual(line['product_number'],'DW215490')
+        self.assertEqual((line['quantity'],line['unit_cost'],line['ppc'],line['unit_of_measure']),('1','27.49','20','CA'))
+        self.assertEqual(line['extended_price'],'27.49')
+        self.assertEqual(line['pack_upc'],'009800000524')
+        barcode=header['source_info']['barcode_details'][0]
+        self.assertEqual(barcode['barcode_raw'],'00985234')
+        self.assertEqual(barcode['barcode_format'],'BarcodeFormat.UPCE')
+        self.assertEqual(barcode['each_price'],'1.37')
+        self.assertEqual(validate_review({**header,'store_id':'000001'},result['lines'])[1],0)
+        matches=classify_lines(result['lines'],header['supplier'],self.db)
+        self.assertEqual(matches[0]['status'],'Existing item')
+        self.assertEqual(matches[0]['confirmed_upc'],'009800000524')
+        saved=save_review(pdf.read_bytes(),pdf.name,{**header,'store_id':'000001'},matches,database=self.db)
+        with sqlite3.connect(self.db) as con:
+            self.assertEqual(con.execute('SELECT total_cents FROM purchase_invoices').fetchone()[0],2749)
+            self.assertEqual(con.execute('SELECT count(*),max(product_number) FROM purchase_lines').fetchone(),(1,'DW215490'))
+            audit=json.loads(con.execute('SELECT decisions_json FROM invoice_reviews').fetchone()[0])
+            self.assertEqual(audit['header']['source_info']['excluded_lines'][0]['product_number'],'DW167380-1')
+        with self.assertRaisesRegex(ValueError,'already saved'):
+            save_review(pdf.read_bytes(),'renamed.pdf',{**header,'store_id':'000001'},matches,database=self.db)
+
+    def test_mercaso_upload_review_save_and_receipt(self):
+        from unittest.mock import patch
+        from streamlit.testing.v1 import AppTest
+        import invoice_review_ui
+        pdf=ROOT/'tests/fixtures/mercaso_invoice.pdf'
+        class Uploaded:
+            name='mercaso.pdf'
+            def getvalue(self):return pdf.read_bytes()
+        with patch.object(invoice_review_ui,'DATABASE',self.db),patch('streamlit.file_uploader',return_value=Uploaded()):
+            app=AppTest.from_file(str(ROOT/'dashboard.py'),default_timeout=30).run()
+            app.sidebar.radio[0].set_value('New Items Review').run()
+            self.assertEqual(len(app.exception),0)
+            values={item.label:item.value for item in app.text_input}
+            self.assertEqual(values['Invoice number'],'M-303112')
+            self.assertEqual(values['Invoice total (credits negative)'],'27.49')
+            self.assertEqual(values['Invoice date (YYYY-MM-DD)'],'2026-10-11')
+            self.assertTrue(any('unfulfilled/not-charged' in item.value for item in app.warning))
+            excluded=next(frame.value for frame in app.dataframe if 'reason' in frame.value.columns)
+            self.assertEqual(excluded.iloc[0].product_number,'DW167380-1')
+            next(b for b in app.button if b.label=='Check for new items').click().run()
+            self.assertEqual(len(app.exception),0)
+            self.assertEqual(app.metric[0].value,'1')
+            next(c for c in app.checkbox if c.label.startswith('I checked')).check().run()
+            next(b for b in app.button if b.label=='Save reviewed invoice').click().run()
+            self.assertEqual(len(app.exception),0)
+            self.assertTrue(any('M-303112' in item.value and '$27.49' in item.value for item in app.success))
+            with sqlite3.connect(self.db) as con:
+                self.assertEqual(con.execute('SELECT count(*) FROM purchase_lines').fetchone()[0],1)
+
+    def test_mercaso_unknown_barcode_does_not_pad_partial_text(self):
+        from unittest.mock import patch
+        import pdfplumber
+        from mercaso_pdf import decode_item_barcode
+        pdf=ROOT/'tests/fixtures/mercaso_invoice.pdf'
+        with pdfplumber.open(pdf) as doc,patch('zxingcpp.read_barcodes',return_value=[]):
+            upc,info=decode_item_barcode(doc.pages[0],(214,374,280,440))
+        self.assertEqual(upc,'')
+        self.assertIn('manually',info['note'])

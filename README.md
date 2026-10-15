@@ -401,3 +401,45 @@ top and beside Save, while retaining the review for correction or retry. Duplica
 and database errors are reported explicitly; they do not produce a success receipt.
 Previously reviewed invoices and their original documents remain available from
 the database after a browser/session restart.
+
+### Mercaso invoices
+
+New Items Review also recognizes the Mercaso invoice layout. Update dependencies
+before using its barcode decoder:
+
+```powershell
+git pull
+.\.venv\Scripts\python.exe -m pip install -r requirements.lock.txt
+.\.venv\Scripts\python.exe -m streamlit run dashboard.py
+```
+
+Only fulfilled/charged product lines enter purchase and new-item review. Lines
+under **Unfulfilled and not charged** are displayed separately and retained in
+source metadata, without becoming purchases. Their exclusion state is carried
+across continued pages. Invoice Total is used for reconciliation; Paid, Amount
+Due, the unfulfilled subtotal, and price-change notices are not added to purchases.
+
+Mercaso's **Code** column contains barcode graphics rather than Fintech's PACK UPC
+text column. The local ZXing decoder reads each product barcode within its own
+column/row region. A verified UPC-E symbol is expanded to its checksum-validated
+12-digit UPC-A, rather than zero-padding the compressed code. For this sample,
+`00985234` (UPC-E) becomes `009800000524`, matching the existing Kinder product.
+Original decoded values and barcode formats remain in the saved source metadata.
+An unreadable, ambiguous, or unsupported barcode stays blank for review; short
+PDF text fragments are not guessed into a product identifier. CASE UPC is not used.
+
+Price / Case is retained as unit cost, Case Qty as quantity, and the printed pack
+count as PPC when explicitly present in the description. Price / Each is preserved
+as a reference, not multiplied to reconstruct a rounded case cost. Per-case CRV
+and discounts are scaled by case quantity; final line Amount is retained exactly.
+No stock receipt or product price/cost update is inferred.
+
+The sample M-303112 contains one fulfilled Kinder Joy case (20 Pack) at 27.49 and
+seven unfulfilled Axe units totaling 23.03. Only the Kinder line is posted after
+confirmation. Invoice Total and Paid are 27.49, while Amount Due is 0.00. Mercaso
+provides an Order Date rather than a separately labeled invoice date, so the
+Order Date is proposed in the editable invoice-date field with a warning to
+verify it. A due date is left empty when none is supplied. Supplier metadata,
+barcode provenance, excluded lines, and payment summary are stored with the review
+and original PDF. Tests exercise the supplied document through extraction,
+matching, reviewed saving, duplicate rejection, and the dashboard receipt.

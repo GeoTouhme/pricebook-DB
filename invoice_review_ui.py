@@ -98,6 +98,13 @@ def render_invoice_review(database=None):
         token+=hashlib.sha256(json.dumps(selected).encode()).hexdigest()[:12]
     else:
         defaults.update(extracted.get('header',{}))
+        source_info=defaults.get('source_info',{})
+        if source_info.get('excluded_lines'):
+            with st.expander('Excluded: unfulfilled and not charged',expanded=True):
+                st.dataframe(pd.DataFrame(source_info['excluded_lines']),hide_index=True,width='stretch')
+        if source_info.get('barcode_details'):
+            with st.expander('Supplier barcode decoding and per-each reference prices'):
+                st.dataframe(pd.DataFrame(source_info['barcode_details']),hide_index=True,width='stretch')
         raw_lines=extracted['lines'] or [blank_line()]
         st.download_button('Download original PDF',payload,uploaded.name,'application/pdf')
         if st.checkbox('Show PDF beside the review'):
@@ -128,6 +135,10 @@ def render_invoice_review(database=None):
                     if chosen=='Add new supplier' else '' if chosen=='Choose a supplier' else chosen)
             else:
                 header[field]=st.text_input(label,value=defaults[field] or '',key=f'{token}_{field}').strip()
+    for field in ['source_info','paid','amount_due']:
+        if field in defaults:header[field]=defaults[field]
+    if 'paid' in defaults:
+        st.caption(f"Supplier reports paid: ${defaults['paid']} · Amount due: ${defaults.get('amount_due','not supplied')}. Invoice total remains the charged total above.")
     st.caption('Supplier spelling should match purchase history. Use the invoice date from the document, not the upload date.')
     st.subheader('2. Check the invoice lines')
     st.caption('Matching uses PACK UPC, normalized to 12 digits by padding or removing only extra leading zeros. CASE UPC is retained for reference. Missing or invalid PACK UPC needs review. Edit extracted values, paste spreadsheet cells, or add rows. Keep UPCs and supplier codes as text. Remove subtotal/footer rows. Quantity and unit cost retain their invoice units; extended_price is the final line amount. Empty adjustments and discount mean zero.')

@@ -41,3 +41,4 @@ typing_extensions==4.16.0
 tzdata==2026.5
 urllib3==2.8.0
 watchdog==6.0.0
+zxing-cpp==2.3.0

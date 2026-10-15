@@ -20,7 +20,7 @@ LINE_FIELDS = ['product_number','upc','description','quantity','unit_cost',
 CSV_FIELDS = dict(zip(LINE_FIELDS, ['Product Number','UPC Number','Product Description',
     'Quantity','Unit Cost','Unit of Measure','PPC','Pack UPC','Total Adjustments',
     'Total Discount','Extended Price']))
-EXTRACTION_VERSION = 4
+EXTRACTION_VERSION = 5
 ACTIONS = ['Review needed','Link existing product','Confirm new item','Keep unlinked']
 
 
@@ -64,6 +64,9 @@ def extract_document(payload, filename):
     with pdfplumber.open(io.BytesIO(payload)) as pdf:
         if len(pdf.pages)>100:
             raise ValueError('Upload at most 100 pages at a time')
+        from mercaso_pdf import extract_invoice
+        supplier_result=extract_invoice(pdf)
+        if supplier_result is not None:return supplier_result
         for page in pdf.pages:
             page_text=page.extract_text() or ''
             text.append(page_text)
