@@ -10,6 +10,18 @@ st.markdown('''<style>
 .block-container {padding-top:2rem;max-width:1500px;}
 [data-testid="stMetric"] {background:#f1f5f9;border-radius:12px;padding:16px;}
 [data-testid="stMetricLabel"], [data-testid="stMetricValue"] {color:#172554;}
+[data-testid="stSidebar"] [role="radiogroup"] {gap:6px;}
+[data-testid="stSidebar"] [role="radiogroup"] > label {
+    padding:10px 12px;border-radius:4px;border:1px solid transparent;
+    transition:background .15s ease,border-color .15s ease;
+}
+[data-testid="stSidebar"] [role="radiogroup"] > label:hover {background:#e2e8f0;}
+[data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked) {
+    background:#e2e8f0;border-color:#cbd5e1;
+}
+[data-testid="stSidebar"] [role="radiogroup"] > label:focus-within {
+    outline:2px solid #2563eb;outline-offset:2px;
+}
 </style>''',unsafe_allow_html=True)
 
 @st.cache_data(show_spinner=False)
@@ -23,14 +35,23 @@ data = cached_data(DATABASE.stat().st_mtime_ns)
 sales, products, inventory, invoices, lines = [data[k] for k in
     ['sales','products','inventory','invoices','purchase_lines']]
 
-st.sidebar.title('BALPORT')
-st.sidebar.caption('Store performance & purchasing')
-page = st.sidebar.radio('Navigate',['Overview','Products','Inventory','Purchases','Data quality'])
-st.sidebar.divider()
-st.sidebar.caption('Data is read from your local database. Import files using the repository import commands, then refresh.')
-if st.sidebar.button('Refresh data'):
-    st.cache_data.clear()
-    st.rerun()
+navigation = ['Overview', 'Products', 'Inventory', 'Purchases', 'Data quality']
+with st.sidebar:
+    st.title('BALPORT')
+    st.caption('Store dashboard')
+    st.divider()
+    page = st.radio('Navigate', navigation,
+        label_visibility='collapsed', key='navigation')
+    st.divider()
+    with st.expander('Data summary'):
+        st.caption(f'{len(products):,} catalog products · {len(invoices):,} invoices / credits')
+        if not sales.empty:
+            st.caption(f'Sales reports: {sales.sale_date.min():%b %d, %Y} – {sales.sale_date.max():%b %d, %Y}')
+        st.caption('For missing dates and unmatched products, see Data quality.')
+    if st.button('Refresh data', width='stretch',
+                 help='Reload the latest imports.'):
+        st.cache_data.clear()
+        st.rerun()
 st.title(page)
 
 
