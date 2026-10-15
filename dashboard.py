@@ -6,6 +6,7 @@ import streamlit as st
 from sidebar_style import sidebar_css
 from animated_number import install_animated_numbers
 from theme_style import install_theme_support
+from chart_animation import install_chart_animations
 from dashboard_data import (DATABASE, load_data, reconcile, sales_coverage,
                             SALES_DEPARTMENT_GROUPS, filter_sales_departments)
 
@@ -20,6 +21,7 @@ st.markdown('''<style>
 
 install_animated_numbers()
 install_theme_support()
+install_chart_animations()
 
 @st.cache_data(show_spinner=False)
 def cached_data(stamp):
