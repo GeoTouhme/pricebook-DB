@@ -17,11 +17,11 @@ def sidebar_css(pinned=False):
         '[data-testid="stSidebar"]:is(:hover, :focus-within)')
     icons = []
     for i, paths in enumerate(ICONS, 1):
-        svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#43605c" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">{paths}</svg>'
+        svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#172554" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">{paths}</svg>'
         icons.append(f'''[data-testid="stSidebar"] [role="radiogroup"] > label:nth-child({i})::before {{
             background-image:url("data:image/svg+xml,{quote(svg, safe='')}"); }}''')
     return '<style>' + '''
-[data-testid="stSidebar"] {background:#f8faf9;border-right:1px solid #e3eae7;}
+[data-testid="stSidebar"] {background:#f1f5f9;border-right:1px solid #e2e8f0;}
 [data-testid="stSidebarContent"] {padding-left:0 !important;padding-right:0 !important;scrollbar-gutter:auto;}
 [data-testid="stSidebarUserContent"] {padding:1.1rem 1rem;}
 [data-testid="stSidebar"] [role="radiogroup"] {gap:8px;}
@@ -33,26 +33,27 @@ def sidebar_css(pinned=False):
 }
 [data-testid="stSidebar"] [role="radiogroup"] > label > div:first-child {display:none;}
 [data-testid="stSidebar"] [role="radiogroup"] > label::before {
+    filter:var(--dashboard-icon-filter, none);
     content:"";width:22px;height:22px;flex:0 0 22px;
     background-size:contain;background-position:center;background-repeat:no-repeat;
 }
-[data-testid="stSidebar"] [role="radiogroup"] > label:hover {background:#eaf0ed;}
+[data-testid="stSidebar"] [role="radiogroup"] > label:hover {background:#e2e8f0;}
 [data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked) {
-    background:#e0eee7;border-color:#c9dfd2;box-shadow:0 2px 4px #193c2c08;
+    background:#dbeafe;border-color:#bfdbfe;box-shadow:0 2px 4px #17255408;
 }
 [data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked)::after {
     content:"";position:absolute;left:0;top:15px;bottom:15px;width:3px;
-    border-radius:4px;background:#287957;
+    border-radius:4px;background:#2563eb;
 }
 [data-testid="stSidebar"] [role="radiogroup"] > label:focus-within {
-    outline:2px solid #287957;outline-offset:2px;
+    outline:2px solid #2563eb;outline-offset:2px;
 }
 .sidebar-brand {display:flex;align-items:center;gap:13px;height:52px;white-space:nowrap;overflow:hidden;}
 .sidebar-monogram {flex:0 0 48px;height:48px;display:grid;place-items:center;
-    background:#214e3b;color:white;border-radius:14px;font:bold 21px Georgia,serif;}
-.sidebar-brand-name {font-weight:650;color:#203e32;font-size:16px;}
-.sidebar-brand-name small {display:block;color:#76877e;font-weight:400;font-size:12px;margin-top:3px;}
-.st-key-sidebar_toggle button {height:48px;white-space:nowrap;border-color:#e0e8e3;background:transparent;border-radius:12px;}
+    background:#172554;color:white;border-radius:14px;font:bold 21px Georgia,serif;}
+.sidebar-brand-name {font-weight:650;color:#172554;font-size:16px;}
+.sidebar-brand-name small {display:block;color:#64748b;font-weight:400;font-size:12px;margin-top:3px;}
+.st-key-sidebar_toggle button {height:48px;white-space:nowrap;border-color:#e2e8f0;background:transparent;border-radius:12px;}
 @media (min-width: 769px) {
     [data-testid="stSidebar"][aria-expanded="true"] {
         width:84px !important;min-width:84px !important;max-width:280px !important;
