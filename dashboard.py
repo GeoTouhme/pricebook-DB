@@ -35,7 +35,7 @@ sales, products, inventory, invoices, lines = [data[k] for k in
     ['sales','products','inventory','invoices','purchase_lines']]
 
 navigation = ['Overview', 'Products', 'Inventory', 'Purchases',
-              'New Items Review', 'Data quality']
+              'New Items Review', 'Data quality', 'Data imports']
 def toggle_sidebar():
     st.session_state.sidebar_pinned = not st.session_state.get('sidebar_pinned', False)
 
@@ -231,6 +231,10 @@ elif page == 'Purchases':
                 st.success('Invoice totals and exact decimal line sums agree for these documents.')
             else:
                 table(flagged,'Download reconciliation flags','reconciliation')
+
+elif page == 'Data imports':
+    from data_imports_ui import render_data_imports
+    render_data_imports(DATABASE)
 
 elif page == 'New Items Review':
     from invoice_review_ui import render_invoice_review

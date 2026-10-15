@@ -40,6 +40,8 @@ def import_inventory(source, database, snapshot_date):
             if dates != {snapshot_date}:
                 raise ValueError('File already imported with another date or import type')
             return {'status': 'already_imported', 'rows': len(rows)}
+        if db.execute('SELECT 1 FROM website_inventory_rows WHERE snapshot_date=? LIMIT 1', (snapshot_date,)).fetchone():
+            raise ValueError('A different website snapshot already exists for this date. Choose the correct export date; replacing a snapshot is not supported.')
         batch = db.execute('INSERT INTO imports(source_name,sha256,row_count) VALUES (?,?,?)',
                            (source.name, digest, len(rows))).lastrowid
         products = {r[0] for r in db.execute('SELECT upc FROM products')}

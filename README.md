@@ -451,3 +451,21 @@ Open the top-right **⋮ → Settings** menu and select **Dark**, **Light**, or
 remembers the selection in this browser. **Custom Theme** restores the original
 blue and white palette. Charts, tables, inputs, the sidebar, and statistic cards
 follow the selected theme; navigation and animated counters keep their behavior.
+
+### Upload updated catalog and website inventory
+
+Open **Data imports** in the sidebar, choose **Price book** or **Website inventory
+snapshot**, then upload the same CSV export format as the original source.
+For website exports, explicitly choose the snapshot date. Click **Validate and
+preview**, review the counts and sample, check the confirmation box, and click
+**Save import**. Every row is validated against a temporary database copy first.
+A SQLite backup is created in `data/backups/` before saving; successful saves
+refresh the dashboard automatically. Exact duplicate uploads do not add records.
+
+Price books update existing UPCs and add new products, including source prices,
+costs, department, and price-book stock. Missing products are retained and source
+UPC text is preserved. Website uploads add dated stock observations separately
+from price-book stock and preserve earlier snapshots. A different file for an
+already occupied snapshot date is rejected to avoid counting the same date twice;
+replacing a saved snapshot is not supported. Uploads do not delete historical
+sales or invoices. CSV uploads are limited to 20 MB.

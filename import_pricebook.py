@@ -19,7 +19,12 @@ def import_pricebook(source, database):
     source, database = Path(source), Path(database)
     payload = source.read_bytes()
     digest = hashlib.sha256(payload).hexdigest()
-    rows = list(csv.DictReader(io.StringIO(payload.decode('utf-8-sig'), newline='')))
+    reader = csv.DictReader(io.StringIO(payload.decode('utf-8-sig'), newline=''))
+    required = {'Upc', 'Department', 'Name', 'size', 'qty', 'cents', 'cost_qty', 'cost_cents', 'incltaxes', 'inclfees', 'ebt', 'byweight', 'variable_price', 'Fee Multiplier', 'setstock'}
+    missing = required - set(reader.fieldnames or [])
+    if missing:
+        raise ValueError('Missing price-book columns: ' + ', '.join(sorted(missing)))
+    rows = list(reader)
     if not rows:
         raise ValueError('Price book contains no products')
     database.parent.mkdir(parents=True, exist_ok=True)
