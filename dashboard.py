@@ -2,7 +2,8 @@
 from datetime import date
 import pandas as pd
 import streamlit as st
-from dashboard_data import DATABASE, load_data, reconcile, sales_coverage
+from dashboard_data import (DATABASE, load_data, reconcile, sales_coverage,
+                            SALES_DEPARTMENT_GROUPS, filter_sales_departments)
 
 st.set_page_config(page_title='Balport · Store dashboard',page_icon='📊',layout='wide')
 st.markdown('''<style>
@@ -68,9 +69,12 @@ if page == 'Overview':
     st.caption('Daily POS report · reported amounts, with unmatched and internal entries clearly separated')
     st.warning('Coverage is incomplete: January–April and August 13–31 are missing. October 15 may be partial. Missing dates are not zero sales.')
     current=dates(sales,'sale_date','sales_dates')
-    departments=st.multiselect('Sales departments',sorted(sales.department.unique()))
-    if departments:
-        current=current[current.department.isin(departments)]
+    departments=st.multiselect('Sales departments',
+        [*SALES_DEPARTMENT_GROUPS, *sorted(sales.department.unique())])
+    current=filter_sales_departments(current,departments)
+    if 'All Beer' in departments:
+        st.caption('All Beer combines: ' + ', '.join(sorted(SALES_DEPARTMENT_GROUPS['All Beer']))
+            + '. Original department names remain visible in charts and exports.')
     scope=st.radio('Include',['All report rows','Matched products only','Unmatched / internal rows'],horizontal=True)
     if scope=='Matched products only':
         current=current[current.matched_upc.notna()]

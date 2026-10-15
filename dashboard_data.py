@@ -8,6 +8,24 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent
 DATABASE = ROOT / 'data/pricebook.sqlite3'
 
+# Explicit membership keeps mixed beer/wine departments out of the beer total.
+SALES_DEPARTMENT_GROUPS = {
+    'All Beer': frozenset({
+        'BEER', 'IPA BEER 1', 'SOUR BEER', 'Craft / Local Beer',
+        'Domestic Beer', 'Import Beer', 'IPA Beer', 'Sour Beer', 'Mexican Beer',
+    }),
+}
+
+
+def filter_sales_departments(sales, selections):
+    if not selections:
+        return sales
+    departments = set()
+    for selection in selections:
+        departments.update(SALES_DEPARTMENT_GROUPS.get(selection, {selection}))
+    return sales[sales.department.isin(departments)]
+
+
 
 def load_data(database=DATABASE):
     with closing(sqlite3.connect(Path(database).resolve().as_uri() + '?mode=ro', uri=True)) as db:

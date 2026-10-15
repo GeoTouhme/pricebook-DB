@@ -224,3 +224,14 @@ Run all checks with the installed environment:
 ```sh
 /workspace/.venvs/pricebook/bin/python -m unittest discover -s tests -v
 ```
+
+### Beer department grouping
+
+In Overview, select **All Beer** under Sales departments for combined beer sales
+across the historic department changes. It includes BEER, IPA BEER 1, SOUR BEER,
+Craft / Local Beer, Domestic Beer, Import Beer, IPA Beer, Sour Beer, and Mexican
+Beer. The mixed Non-Alcoholic Beer & Wine department remains separately selectable.
+Selecting All Beer together with one of its member departments does not duplicate
+rows. Source department names remain unchanged in the database, breakdowns, and
+CSV exports. For all report rows, June 12 totals 1,582.79 and June 13 totals
+2,097.16 across All Beer; BEER alone remains 1,019.27 and 202.97 respectively.

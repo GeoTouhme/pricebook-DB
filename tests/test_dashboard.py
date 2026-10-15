@@ -40,3 +40,22 @@ class DashboardTests(unittest.TestCase):
         app.sidebar.radio[0].set_value('Data quality').run()
         self.assertEqual(app.metric[0].value,'16,508')
         self.assertEqual(len(app.exception),0)
+
+    def test_all_beer_group_across_department_change(self):
+        app=AppTest.from_file(str(ROOT/'dashboard.py'),default_timeout=30).run()
+        app.multiselect[0].set_value(['All Beer']).run()
+        for day,total in [(date(2026,6,12),'$1,582.79'),(date(2026,6,13),'$2,097.16')]:
+            app.date_input[0].set_value((day,day)).run()
+            self.assertEqual(len(app.exception),0)
+            self.assertEqual(app.metric[0].value,total)
+        # A group and one of its members must not count the same rows twice.
+        app.multiselect[0].set_value(['All Beer','BEER']).run()
+        self.assertEqual(app.metric[0].value,'$2,097.16')
+        app.multiselect[0].set_value(['BEER']).run()
+        self.assertEqual(app.metric[0].value,'$202.97')
+        from dashboard_data import filter_sales_departments
+        sales=load_data()['sales']
+        original=sales.department.copy()
+        combined=filter_sales_departments(sales,['All Beer'])
+        self.assertNotIn('Non-Alcoholic Beer & Wine',set(combined.department))
+        self.assertTrue(sales.department.equals(original))
