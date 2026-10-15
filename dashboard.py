@@ -4,6 +4,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 from sidebar_style import sidebar_css
+from animated_number import install_animated_numbers
 from dashboard_data import (DATABASE, load_data, reconcile, sales_coverage,
                             SALES_DEPARTMENT_GROUPS, filter_sales_departments)
 
@@ -15,6 +16,8 @@ st.markdown('''<style>
 [data-testid="stMetric"] {background:#f1f5f9;border-radius:12px;padding:16px;}
 [data-testid="stMetricLabel"], [data-testid="stMetricValue"] {color:#172554;}
 </style>''',unsafe_allow_html=True)
+
+install_animated_numbers()
 
 @st.cache_data(show_spinner=False)
 def cached_data(stamp):
