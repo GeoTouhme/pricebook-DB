@@ -72,9 +72,10 @@ if page == 'Overview':
     departments=st.multiselect('Sales departments',
         [*SALES_DEPARTMENT_GROUPS, *sorted(sales.department.unique())])
     current=filter_sales_departments(current,departments)
-    if 'All Beer' in departments:
-        st.caption('All Beer combines: ' + ', '.join(sorted(SALES_DEPARTMENT_GROUPS['All Beer']))
-            + '. Original department names remain visible in charts and exports.')
+    for selection in departments:
+        if selection in SALES_DEPARTMENT_GROUPS:
+            st.caption(selection + ' combines: ' + ', '.join(sorted(SALES_DEPARTMENT_GROUPS[selection]))
+                + '. Original department names remain visible in charts and exports.')
     scope=st.radio('Include',['All report rows','Matched products only','Unmatched / internal rows'],horizontal=True)
     if scope=='Matched products only':
         current=current[current.matched_upc.notna()]

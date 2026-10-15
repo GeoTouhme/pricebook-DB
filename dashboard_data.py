@@ -1,6 +1,7 @@
 """Read-only dashboard queries and exact invoice reconciliation."""
 from contextlib import closing
 from decimal import Decimal
+import json
 from pathlib import Path
 import sqlite3
 import pandas as pd
@@ -8,12 +9,10 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent
 DATABASE = ROOT / 'data/pricebook.sqlite3'
 
-# Explicit membership keeps mixed beer/wine departments out of the beer total.
+# Explicit, reviewable membership preserves source department names.
 SALES_DEPARTMENT_GROUPS = {
-    'All Beer': frozenset({
-        'BEER', 'IPA BEER 1', 'SOUR BEER', 'Craft / Local Beer',
-        'Domestic Beer', 'Import Beer', 'IPA Beer', 'Sour Beer', 'Mexican Beer',
-    }),
+    name: frozenset(members)
+    for name, members in json.loads((ROOT / 'department_groups.json').read_text()).items()
 }
 
 

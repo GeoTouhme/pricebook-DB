@@ -235,3 +235,25 @@ Selecting All Beer together with one of its member departments does not duplicat
 rows. Source department names remain unchanged in the database, breakdowns, and
 CSV exports. For all report rows, June 12 totals 1,582.79 and June 13 totals
 2,097.16 across All Beer; BEER alone remains 1,019.27 and 202.97 respectively.
+
+### Groups for all sales departments
+
+Overview now offers 54 combined department groups, with explicit membership in
+`department_groups.json`. Every currently imported sales department belongs to
+one group. The original department options, chart breakdowns, and export values
+remain available. Selecting multiple groups or a group plus its member uses the
+union of matching rows, so each report row is counted once.
+
+All Wine includes the wine varieties, general/organic/small-format wine, and
+Champagne/sparkling departments. Non-Alcoholic Beer & Wine and Sake & Soju have
+separate groups. Spirits are grouped by type (vodka, tequila, whiskey/scotch,
+gin, rum, brandy/cognac, liqueur, shots, and other spirits). Drinks, food, tobacco,
+accessories, fees, lottery, tax categories, and other source families also have
+combined filters. Mixed source departments keep their existing contents;
+grouping does not classify individual products, fix incorrect source categories,
+or turn tax/cash-back/lottery totals into merchandise revenue. Ambiguous
+NonAlcohol source departments are kept under All Unclassified Drinks.
+
+For all report rows, All Wine totals 808.69 on June 12 and 1,938.02 on June 13.
+New source department names remain individually selectable and should be reviewed
+for addition to the mapping when new exports are imported.

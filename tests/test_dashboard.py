@@ -59,3 +59,32 @@ class DashboardTests(unittest.TestCase):
         combined=filter_sales_departments(sales,['All Beer'])
         self.assertNotIn('Non-Alcoholic Beer & Wine',set(combined.department))
         self.assertTrue(sales.department.equals(original))
+
+    def test_department_groups_cover_sources_without_changing_totals(self):
+        from collections import Counter
+        from dashboard_data import SALES_DEPARTMENT_GROUPS, filter_sales_departments
+        sales=load_data()['sales']
+        memberships=Counter(d for group in SALES_DEPARTMENT_GROUPS.values() for d in group)
+        self.assertEqual(set(sales.department)-memberships.keys(),set())
+        self.assertTrue(all(count==1 for count in memberships.values()))
+        selected=filter_sales_departments(sales,list(SALES_DEPARTMENT_GROUPS))
+        self.assertEqual(len(selected),len(sales))
+        self.assertEqual(selected.sales_cents.sum(),sales.sales_cents.sum())
+        self.assertEqual(selected.scan_sales_cents.sum(),sales.scan_sales_cents.sum())
+        self.assertNotIn('Non-Alcoholic Beer & Wine',SALES_DEPARTMENT_GROUPS['All Wine'])
+        self.assertIn('Champagne',SALES_DEPARTMENT_GROUPS['All Wine'])
+
+    def test_wine_filter_and_multiple_groups(self):
+        app=AppTest.from_file(str(ROOT/'dashboard.py'),default_timeout=30).run()
+        app.multiselect[0].set_value(['All Wine']).run()
+        day=date(2026,6,12)
+        app.date_input[0].set_value((day,day)).run()
+        self.assertEqual(app.metric[0].value,'$808.69')
+        app.multiselect[0].set_value(['All Wine','White Wine','Champagne']).run()
+        self.assertEqual(app.metric[0].value,'$808.69')
+        app.multiselect[0].set_value(['All Wine','All Beer']).run()
+        self.assertEqual(app.metric[0].value,'$2,391.48')
+        day=date(2026,6,13)
+        app.date_input[0].set_value((day,day)).run()
+        self.assertEqual(app.metric[0].value,'$4,035.18')
+        self.assertEqual(len(app.exception),0)
