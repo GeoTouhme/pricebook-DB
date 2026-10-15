@@ -1,0 +1,11 @@
+supplier,invoice_number,invoice_date,invoice_total,line_total,difference,declared_item_count,imported_lines
+Guardian Distributors of Los Angeles,W-242025,2026-03-13,-152.12,-152.1152,-0.0048,5,5
+Los Angeles Distributing Company,527243,2026-03-11,561.87,561.875,-0.005,25,25
+Los Angeles Distributing Company,546788,2026-05-22,1176.41,1176.4778,-0.0678,41,41
+Los Angeles Distributing Company,553705,2026-06-17,491.95,491.8422,0.1078,13,13
+Los Angeles Distributing Company,563017,2026-07-22,985.11,985.115,-0.005,47,47
+MARA Imports,20120,2026-07-31,45.91,45.912,-0.002,2,2
+Guardian Distributors of Los Angeles,W-261299,2026-09-11,-10.69,-10.6932,0.0032,1,1
+Los Angeles Distributing Company,578847,2026-09-16,806.36,806.3662,-0.0062,37,37
+"Stolpman Vineyards, LLC",6512454,2026-09-30,201.2,201.2004,-0.0004,2,2
+Guardian Distributors of Los Angeles,W-236882,2026-01-23,-14.48,-14.4849,0.0049,2,2
