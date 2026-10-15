@@ -383,3 +383,21 @@ including zero quantities, wrapped descriptions, full PACK UPCs, a quantity of
 sessions are versioned so pre-fix truncated results are read again after updating.
 This correction affects extraction and does not post the sample invoice or alter
 previously saved invoices; any previously saved incorrect values require review.
+
+### Saving a reviewed invoice
+
+Step 4 lists every line whose decision, UPC, or saved-mapping choice needs
+attention, using line numbers that match the decision editor. Save becomes
+available after those issues are resolved, the original-document review box is
+checked, and any invoice-total difference is acknowledged. Press Enter or leave
+a grid cell to apply its latest edit before checking readiness.
+
+The page displays a saving indicator and a receipt containing the actual invoice
+number, supplier, amount, purchase record ID, and line count. This confirmation
+survives reruns and navigation during the browser session. **View in Purchases**
+opens the purchasing page. The same successfully saved upload cannot be submitted
+again from the review page. Failed attempts show a persistent explanation at the
+top and beside Save, while retaining the review for correction or retry. Duplicate
+and database errors are reported explicitly; they do not produce a success receipt.
+Previously reviewed invoices and their original documents remain available from
+the database after a browser/session restart.

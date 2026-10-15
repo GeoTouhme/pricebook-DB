@@ -259,6 +259,33 @@ def validate_review(header,lines):
     return normalized,difference
 
 
+
+def confirm_line_decision(row,decision,catalog,index):
+    action=decision.get('action','Review needed');upc=str(decision.get('confirmed_upc','')).strip()
+    if action not in ACTIONS[1:]:raise ValueError(f'Line {index} still needs review')
+    if action=='Link existing product' and upc not in catalog:
+        upc=normalize_pack_upc(upc)
+        if upc not in catalog:raise ValueError(f'Line {index}: choose an existing catalog UPC')
+    if action=='Confirm new item':
+        if upc in catalog:raise ValueError(f'Line {index}: UPC already exists; link it instead')
+        upc=normalize_pack_upc(upc)
+        if not re.fullmatch(r'[0-9]{12}',upc):
+            raise ValueError(f'Line {index}: enter a 12-digit retail UPC for a new item')
+        if upc in catalog:raise ValueError(f'Line {index}: normalized UPC already exists; link it instead')
+    if decision.get('remember_mapping') and (action!='Link existing product' or not row['product_number']):
+        raise ValueError(f'Line {index}: a saved mapping needs an existing product and supplier product number')
+    return action,upc,bool(decision.get('remember_mapping'))
+
+
+def review_decision_errors(decisions,catalog):
+    errors=[]
+    for index,row in enumerate(decisions,1):
+        try:confirm_line_decision(row,row,catalog,index)
+        except (ValueError,ArithmeticError) as exc:
+            errors.append({'Line':index,'Item':row.get('description',''),'Problem':str(exc)})
+    return errors
+
+
 def save_review(payload,filename,header,decisions,acknowledge_difference=False,database=DATABASE):
     """All database writes, including the original document, commit or roll back together."""
     rows,difference=validate_review(header,decisions)
@@ -270,22 +297,8 @@ def save_review(payload,filename,header,decisions,acknowledge_difference=False,d
         if filename.lower().endswith('.csv') else document_digest)
     products,_,_,_=read_history(database)
     catalog={p['upc'] for p in products}
-    confirmed=[]
-    for index,(row,decision) in enumerate(zip(rows,decisions),1):
-        action=decision.get('action','Review needed');upc=str(decision.get('confirmed_upc','')).strip()
-        if action not in ACTIONS[1:]:raise ValueError(f'Line {index} still needs review')
-        if action=='Link existing product' and upc not in catalog:
-            upc=normalize_pack_upc(upc)
-            if upc not in catalog:raise ValueError(f'Line {index}: choose an existing catalog UPC')
-        if action=='Confirm new item':
-            if upc in catalog:raise ValueError(f'Line {index}: UPC already exists; link it instead')
-            upc=normalize_pack_upc(upc)
-            if not re.fullmatch(r'[0-9]{12}',upc):
-                raise ValueError(f'Line {index}: enter a 12-digit retail UPC for a new item')
-            if upc in catalog:raise ValueError(f'Line {index}: normalized UPC already exists; link it instead')
-        if decision.get('remember_mapping') and (action!='Link existing product' or not row['product_number']):
-            raise ValueError(f'Line {index}: a saved mapping needs an existing product and supplier product number')
-        confirmed.append((action,upc,bool(decision.get('remember_mapping'))))
+    confirmed=[confirm_line_decision(row,decision,catalog,index)
+               for index,(row,decision) in enumerate(zip(rows,decisions),1)]
     with sqlite3.connect(database) as db:
         db.executescript((ROOT/'schema.sql').read_text())
         # Serialize duplicate checks with the writes; concurrent browser sessions cannot double-post.

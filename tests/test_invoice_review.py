@@ -200,6 +200,14 @@ class InvoiceReviewTests(unittest.TestCase):
             button(app,'Save reviewed invoice').click().run()
             self.assertEqual(len(app.exception),0)
             self.assertTrue(any('Saved invoice' in s.value for s in app.success))
+            self.assertTrue(any('UI-TEST' in s.value and '$10.00' in s.value for s in app.success))
+            app.run()
+            self.assertTrue(any('UI-TEST' in s.value for s in app.success))
+            self.assertFalse(any(b.label=='Save reviewed invoice' for b in app.button))
+            button(app,'View in Purchases').click().run()
+            self.assertEqual(app.sidebar.radio[0].value,'Purchases')
+            app.sidebar.radio[0].set_value('New Items Review').run()
+            self.assertTrue(any('UI-TEST' in s.value for s in app.success))
             with sqlite3.connect(self.db) as con:
                 self.assertEqual(con.execute('SELECT count(*) FROM purchase_invoices').fetchone()[0],1)
                 self.assertEqual(con.execute('SELECT document FROM invoice_reviews').fetchone()[0],payload)
@@ -379,5 +387,65 @@ class InvoiceReviewTests(unittest.TestCase):
             matches=next(frame.value for frame in app.dataframe if 'suggestions' in frame.value.columns)
             self.assertEqual(matches.iloc[0].upc,'070897013315')
             self.assertEqual(sum(int(metric.value) for metric in app.metric),81)
+            with sqlite3.connect(self.db) as con:
+                self.assertEqual(con.execute('SELECT count(*) FROM purchase_invoices').fetchone()[0],0)
+
+    def test_save_preflight_lists_every_blocking_line(self):
+        from invoice_review import review_decision_errors
+        rows=[self.line(action='Review needed'),
+              self.line(action='Link existing product',confirmed_upc='123456789012'),
+              self.line(action='Keep unlinked',remember_mapping=True)]
+        errors=review_decision_errors(rows,{'200001000003'})
+        self.assertEqual([row['Line'] for row in errors],[1,2,3])
+        self.assertIn('still needs review',errors[0]['Problem'])
+        self.assertEqual(review_decision_errors([self.line()],{'200001000003'}),[])
+
+    def test_unfinished_pdf_decisions_visibly_disable_save(self):
+        from unittest.mock import patch
+        from streamlit.testing.v1 import AppTest
+        import invoice_review_ui
+        pdf=ROOT/'tests/fixtures/fintech_wrapped_pack_invoice.pdf'
+        class Uploaded:
+            name='invoice.pdf'
+            def getvalue(self):return pdf.read_bytes()
+        with patch.object(invoice_review_ui,'DATABASE',self.db),patch('streamlit.file_uploader',return_value=Uploaded()),patch.object(invoice_review_ui,'save_review') as save:
+            app=AppTest.from_file(str(ROOT/'dashboard.py'),default_timeout=30).run()
+            app.sidebar.radio[0].set_value('New Items Review').run()
+            next(b for b in app.button if b.label=='Check for new items').click().run()
+            next(c for c in app.checkbox if c.label.startswith('I checked')).check().run()
+            self.assertEqual(len(app.exception),0)
+            self.assertTrue(next(b for b in app.button if b.label=='Save reviewed invoice').disabled)
+            self.assertTrue(any('lines need a valid decision' in item.value for item in app.info))
+            errors=next(frame.value for frame in app.dataframe if 'Problem' in frame.value.columns)
+            self.assertGreater(len(errors),0)
+            self.assertTrue(all(errors.Line>0))
+            save.assert_not_called()
+
+    def test_save_errors_persist_until_another_attempt(self):
+        from unittest.mock import patch
+        from streamlit.testing.v1 import AppTest
+        import invoice_review_ui
+        from import_invoices import HEADERS
+        record=dict.fromkeys(HEADERS,'')
+        record.update({'Vendor Name':'Test Supplier','Retailer Name':'Balport Liquor Store',
+            'Store ID':'000001','Invoice Number':'ERROR-TEST','Invoice Date':'10/15/2026 00:00:00',
+            'Invoice Total':'10.00','Item Count':'1','Product Number':'TEST','Pack UPC':'200001000003',
+            'Product Description':'ULTRA WATERMELON FOCUS','Quantity':'2','Unit Cost':'5',
+            'Unit of Measure':'BO','PPC':'1','Total Adjustments':'0','Total Discount':'0','Extended Price':'10.00'})
+        stream=io.StringIO(newline='');writer=csv.DictWriter(stream,fieldnames=HEADERS)
+        writer.writeheader();writer.writerow(record);payload=stream.getvalue().encode()
+        class Uploaded:
+            name='error.csv'
+            def getvalue(self):return payload
+        with patch.object(invoice_review_ui,'DATABASE',self.db),patch('streamlit.file_uploader',return_value=Uploaded()),patch.object(invoice_review_ui,'save_review',side_effect=sqlite3.OperationalError('database is locked')):
+            app=AppTest.from_file(str(ROOT/'dashboard.py'),default_timeout=30).run()
+            app.sidebar.radio[0].set_value('New Items Review').run()
+            next(b for b in app.button if b.label=='Check for new items').click().run()
+            next(c for c in app.checkbox if c.label.startswith('I checked')).check().run()
+            next(b for b in app.button if b.label=='Save reviewed invoice').click().run()
+            self.assertEqual(len(app.exception),0)
+            self.assertTrue(any('Invoice was not saved: database is locked' in error.value for error in app.error))
+            app.run()
+            self.assertTrue(any('database is locked' in error.value for error in app.error))
             with sqlite3.connect(self.db) as con:
                 self.assertEqual(con.execute('SELECT count(*) FROM purchase_invoices').fetchone()[0],0)
