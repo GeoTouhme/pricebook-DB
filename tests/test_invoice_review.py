@@ -50,7 +50,7 @@ class InvoiceReviewTests(unittest.TestCase):
 
     def line(self,**overrides):
         return {**blank_line(),'product_number':'ABC-1','description':'ULTRA WATERMELON FOCUS',
-            'upc':'200001000003','quantity':'2','unit_cost':'5','extended_price':'10.00',
+            'upc':'200001000003','pack_upc':overrides.get('upc','200001000003'),'quantity':'2','unit_cost':'5','extended_price':'10.00',
             'unit_of_measure':'BO','ppc':'1','action':'Link existing product',
             'confirmed_upc':'200001000003','remember_mapping':False,**overrides}
 
@@ -73,7 +73,9 @@ class InvoiceReviewTests(unittest.TestCase):
         selected=[r for r in result['records'] if r['Invoice Number']==first['Invoice Number']]
         header,lines=from_csv(selected)
         self.assertEqual(header['invoice_number'],first['Invoice Number'])
-        self.assertEqual(lines[0]['upc'],first['UPC Number'])
+        from purchase_matching import pack_upc_or_blank
+        self.assertEqual(lines[0]['upc'],pack_upc_or_blank(first['Pack UPC']))
+        self.assertEqual(lines[0]['pack_upc'],first['Pack UPC'])
         self.assertEqual(header['invoice_date'],'2026-02-27')
         changed=[dict(row) for row in selected]
         changed[-1]['Invoice Total']='999999'
@@ -85,14 +87,14 @@ class InvoiceReviewTests(unittest.TestCase):
         self.assertEqual(before['status'],'Existing item')
         self.assertEqual(before['purchase_history'],'Not seen in imported purchase history')
         result=save_review(b'invoice test','invoice.pdf',self.header,
-            [self.line(upc='10000000000001',remember_mapping=True)],database=self.db)
-        mapped=classify_lines([self.line(upc='10000000000001')],self.header['supplier'],self.db)[0]
+            [self.line(upc='00100000000001',remember_mapping=True)],database=self.db)
+        mapped=classify_lines([self.line(upc='00100000000001')],self.header['supplier'],self.db)[0]
         self.assertEqual(mapped['status'],'Existing item')
         self.assertEqual(mapped['confirmed_upc'],'200001000003')
         self.assertEqual(mapped['purchase_history'],'Seen from this supplier')
-        other_pack=classify_lines([self.line(upc='10000000000001',ppc='24')],self.header['supplier'],self.db)[0]
+        other_pack=classify_lines([self.line(upc='00100000000001',ppc='24')],self.header['supplier'],self.db)[0]
         self.assertNotEqual(other_pack['status'],'Existing item')
-        other_vendor=classify_lines([self.line(upc='10000000000001')],'Different supplier',self.db)[0]
+        other_vendor=classify_lines([self.line(upc='00100000000001')],'Different supplier',self.db)[0]
         self.assertNotEqual(other_vendor['status'],'Existing item')
         self.assertEqual(other_vendor['purchase_history'],'Seen from another supplier')
         conflicting=classify_lines([self.line(upc='499733700064')],self.header['supplier'],self.db)[0]
@@ -176,7 +178,7 @@ class InvoiceReviewTests(unittest.TestCase):
         record.update({'Vendor Name':self.header['supplier'],'Retailer Name':self.header['retailer'],
             'Customer ID':'account','Store ID':'000001','Invoice Number':'UI-TEST',
             'Invoice Date':'10/15/2026 00:00:00','Invoice Total':'10.00','Item Count':'1',
-            'Product Number':'UI-1','UPC Number':'200001000003','Product Description':'ULTRA WATERMELON FOCUS',
+            'Product Number':'UI-1','Pack UPC':'00200001000003','UPC Number':'499733700064','Product Description':'ULTRA WATERMELON FOCUS',
             'Quantity':'2','Unit Cost':'5','Unit of Measure':'BO','PPC':'1',
             'Total Adjustments':'0','Total Discount':'0','Extended Price':'10.00'})
         stream=io.StringIO(newline='');writer=csv.DictWriter(stream,fieldnames=HEADERS)
@@ -229,25 +231,25 @@ class InvoiceReviewTests(unittest.TestCase):
         matches=classify_lines(result['lines'],header['supplier'],self.db)
         self.assertTrue(all(row['status']=='Previously purchased' for row in matches))
         self.assertEqual([row['suggestions'].split(' — ')[0] for row in matches[1:]],
-            ['811538011129','080516406947','898756001057','898756001477','898756001231','898756001576'])
+            ['','080516406947','','898756001477','898756001231',''])
         self.assertEqual(matches[0]['suggestions'],'')
         self.assertTrue(all(row['action']=='Review needed' for row in matches))
-        # Persist the case barcode without inventing a retail link; use only this temporary DB.
+        # Blank PACK UPC must remain blank; CASE UPC is preserved only in the review audit.
         decisions=[{**r,'action':'Keep unlinked','confirmed_upc':''} for r in matches]
         saved=save_review(pdf.read_bytes(),pdf.name,header,decisions,database=self.db)
         with sqlite3.connect(self.db) as con:
             self.assertEqual(con.execute('SELECT source_upc FROM purchase_lines WHERE invoice_id=? ORDER BY line_number',
-                (saved['invoice_id'],)).fetchall(),[(r['case_upc'],) for r in result['lines']])
+                (saved['invoice_id'],)).fetchall(),[('',) for r in result['lines']])
             self.assertEqual(con.execute('SELECT total_cents FROM purchase_invoices WHERE id=?',(saved['invoice_id'],)).fetchone()[0],63312)
 
-    def test_case_gtin_candidates_require_valid_checksum_and_confirmation(self):
-        from invoice_review import case_retail_candidates,compatible_name
-        self.assertIn('898756001477',case_retail_candidates('10898756001474'))
-        self.assertEqual(case_retail_candidates('10898756001475'),set())
-        self.assertEqual(case_retail_candidates('6.0925E+11'),set())
-        from invoice_review import gs1_check_digit
-        variable_body='9089875600147'
-        self.assertEqual(case_retail_candidates(variable_body+gs1_check_digit(variable_body)),set())
+    def test_pack_upc_normalization_and_compatible_names(self):
+        from purchase_matching import normalize_pack_upc
+        from invoice_review import compatible_name
+        for raw,expected in [('00070897013315','070897013315'),('070897013315','070897013315'),
+                             ('70897013315','070897013315'),('12345678','000012345678'),('', '')]:
+            self.assertEqual(normalize_pack_upc(raw),expected)
+        for raw in ['10898756001474','6.0925E+11','123.0','1234-5678']:
+            with self.assertRaises(ValueError):normalize_pack_upc(raw)
         self.assertFalse(compatible_name('LINE 39 P NOIR 750ML','Line 39 merlot 750ml'))
         self.assertFalse(compatible_name('1800 TEQ ULT MARG RTD 1.75L','1800 TEQ ULT WATERMELON MARG RTD 1.75L'))
         self.assertFalse(compatible_name('BANFI CHIANTI SUPERIORE 750ML','SANTA CRISTINA CHIANTI SUPERIORE 750ML'))
@@ -280,3 +282,45 @@ class InvoiceReviewTests(unittest.TestCase):
             next(b for b in app.button if b.label=='Check for new items').click().run()
             self.assertEqual(len(app.exception),0)
             self.assertEqual(sum(int(metric.value) for metric in app.metric),7)
+
+    def test_matching_uses_normalized_pack_and_never_case(self):
+        known=self.line(upc='499733700064',case_upc='10898756001474',pack_upc='00200001000003')
+        result=classify_lines([known],self.header['supplier'],self.db)[0]
+        self.assertEqual(result['upc'],'200001000003')
+        self.assertEqual(result['confirmed_upc'],'200001000003')
+        example=classify_lines([self.line(pack_upc='00070897013315')],self.header['supplier'],self.db)[0]
+        self.assertEqual(example['upc'],'070897013315')
+        self.assertEqual(example['confirmed_upc'],'070897013315')
+        missing=self.line(upc='200001000003',case_upc='10898756001474',pack_upc='',description='UNKNOWN UNIQUE THING')
+        result=classify_lines([missing],self.header['supplier'],self.db)[0]
+        self.assertEqual(result['upc'],'')
+        self.assertEqual(result['status'],'Unreadable code')
+        self.assertEqual(result['confirmed_upc'],'')
+        self.assertEqual(result['suggestions'],'')
+        invalid={**known,'pack_upc':'10898756001474','description':'UNKNOWN UNIQUE THING'}
+        result=classify_lines([invalid],self.header['supplier'],self.db)[0]
+        self.assertEqual(result['status'],'Unreadable code')
+        self.assertEqual(result['confirmed_upc'],'')
+
+    def test_new_item_confirmation_stores_twelve_digits(self):
+        row=self.line(pack_upc='00123456789012',description='BRAND NEW PRODUCT',
+            action='Confirm new item',confirmed_upc='00123456789012')
+        save_review(b'new normalized','new.pdf',self.header,[row],database=self.db)
+        with sqlite3.connect(self.db) as con:
+            self.assertEqual(con.execute('SELECT retail_upc FROM catalog_candidates').fetchone()[0],'123456789012')
+            self.assertEqual(con.execute('SELECT source_upc,pack_upc FROM purchase_lines').fetchone(),('123456789012','00123456789012'))
+
+    def test_refresh_auto_links_preserves_explicit_reviews(self):
+        from purchase_matching import refresh_purchase_pack_links
+        for source in sorted((ROOT/'data/invoices').glob('*.csv')):import_invoices(source,self.db)
+        self.assertEqual(refresh_purchase_pack_links(self.db)['updated_links'],0)
+        with sqlite3.connect(self.db) as con:
+            lid,correct=con.execute("SELECT id,matched_upc FROM purchase_lines WHERE matched_upc IS NOT NULL AND matched_upc!='200001000003' LIMIT 1").fetchone()
+            con.execute('UPDATE purchase_lines SET matched_upc=? WHERE id=?',('200001000003',lid))
+        saved=save_review(b'manually linked','manual.pdf',self.header,
+            [self.line(confirmed_upc='499733700064')],database=self.db)
+        self.assertEqual(refresh_purchase_pack_links(self.db)['updated_links'],1)
+        self.assertEqual(refresh_purchase_pack_links(self.db)['updated_links'],0)
+        with sqlite3.connect(self.db) as con:
+            self.assertEqual(con.execute('SELECT matched_upc FROM purchase_lines WHERE id=?',(lid,)).fetchone()[0],correct)
+            self.assertEqual(con.execute('SELECT matched_upc FROM purchase_lines WHERE invoice_id=?',(saved['invoice_id'],)).fetchone()[0],'499733700064')

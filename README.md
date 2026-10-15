@@ -183,9 +183,9 @@ exports are counted once, with source provenance preserved. Conflicting or parti
 versions of an existing invoice are rejected for review; identical repeated lines
 within a source invoice are retained. Imports are transactional per file.
 
-1,265 lines match the catalog by exact `UPC Number`; 7,002 remain unlinked.
-Pack barcodes and supplier product numbers are retained but not assumed equivalent
-to retail UPCs. See `data/purchase_unmatched.csv` for mapping review.
+7,270 lines match the catalog using normalized `Pack UPC`; 997 remain unlinked.
+Original UPC Number and Pack UPC values are retained. Only PACK UPC supplies
+the automatic barcode match; CASE UPC is not substituted. See `data/purchase_unmatched.csv` for mapping review.
 `data/invoice_reconciliation.csv` lists 10 documents with differences between
 invoice totals and exact decimal line sums. Some differences are fractions of a
 cent; no amounts were altered to force reconciliation. A future dashboard should
@@ -308,7 +308,7 @@ show the PDF and extracted text. Uploaded files are limited to 20 MB and PDFs to
 100 pages. No document content is executed.
 
 Name similarity, pack barcodes, and historical supplier links are suggestions;
-only an exact retail UPC or an explicitly remembered supplier/pack mapping is
+only an exact normalized PACK UPC or an explicitly remembered supplier/pack mapping is
 linked automatically. Historical purchases with no catalog match remain distinct
 from genuinely new catalog candidates. Scientific notation, missing barcodes,
 and pack-vs-retail ambiguity require review.
@@ -327,16 +327,43 @@ The supported Fintech report fills supplier, bill-to retailer, invoice number,
 invoice date, due date, and total directly from labeled document fields. It uses
 the table header geometry to read body columns even when there are no vertical
 body rules, joins wrapped descriptions, and keeps PRICE separate from final TOTAL.
-CASE UPC is shown separately from retail UPC. Case codes remain unchanged in
-purchase provenance and the source barcode field when the reviewed invoice is saved.
+CASE UPC is retained for reference and in the review audit. The matching UPC is
+derived only from PACK UPC. Reviewed purchases store the normalized PACK UPC
+in the source barcode field; raw PACK UPC remains separately available.
 
 Items found in prior purchases but without a confirmed retail link are labeled
 **Previously purchased**, even if they are missing from the price book. They are
 not labeled potentially new merely because a case barcode differs from retail.
-Valid GS1 case barcodes can suggest a corresponding existing retail barcode by
-recomputing its check digit. These candidates still require user confirmation;
-case or pack relationships are never auto-linked from this conversion.
+CASE UPC is not converted into a retail barcode or used as a fallback. Missing
+PACK UPC needs review; supplier history and compatible names may still provide
+suggestions, and explicitly confirmed supplier mappings remain available.
 Name suggestions require compatible brand, wine variety, and flavor tokens;
 for example, Merlot is not suggested for Pinot Noir, and watermelon is not
 suggested for an unflavored margarita description. Unknown source layouts and
 scans retain the editable/manual fallback.
+
+
+### PACK UPC: 12-digit matching rule
+
+Invoice matching uses **PACK UPC**, never CASE UPC. Values are kept as text.
+For example, `00070897013315` becomes `070897013315`: remove only extra leading
+zeros beyond 12 digits. Shorter digit-only values are left-padded to 12 digits.
+Nonzero prefixes beyond 12 digits, letters, decimal values, and scientific notation
+are flagged rather than truncated or guessed. Original document values remain
+unchanged. A blank PACK UPC stays blank and is not replaced by CASE UPC.
+New-item confirmations use 12-digit UPCs and check for an existing catalog item
+after normalization. Existing price-book UPCs are not rewritten.
+
+To update automatic matches in an existing Windows database, stop Streamlit and run:
+
+```powershell
+git pull
+.\.venv\Scripts\python.exe purchase_matching.py
+.\.venv\Scripts\python.exe -m streamlit run dashboard.py
+```
+
+The refresh command is idempotent. It updates only original CSV automatic links;
+explicitly reviewed invoice links, raw source values, quantities, and monetary
+amounts are preserved. The cloud setup script also runs this refresh step.
+The seven-line sample PDF has no PACK UPC values, so its rows need review or a
+confirmed supplier mapping; the app does not substitute its populated CASE UPCs.

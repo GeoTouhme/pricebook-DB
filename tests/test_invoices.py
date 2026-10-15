@@ -20,7 +20,7 @@ class InvoiceTests(unittest.TestCase):
             with sqlite3.connect(db) as con:
                 self.assertEqual(con.execute('SELECT count(*) FROM suppliers').fetchone()[0],21)
                 self.assertEqual(con.execute('SELECT count(*),sum(total_cents),sum(total_cents<0) FROM purchase_invoices').fetchone(),(447,67664269,65))
-                self.assertEqual(con.execute('SELECT count(*),sum(matched_upc IS NOT NULL) FROM purchase_lines').fetchone(),(8267,1265))
+                self.assertEqual(con.execute('SELECT count(*),sum(matched_upc IS NOT NULL) FROM purchase_lines').fetchone(),(8267,7270))
                 self.assertEqual(con.execute('SELECT count(*) FROM purchase_lines WHERE extended_price=?',('-65.716',)).fetchone()[0],1)
                 for name,iid in con.execute('SELECT source_name,id FROM imports WHERE id IN (SELECT import_id FROM purchase_source_rows)'):
                     with (ROOT/'data/invoices'/name).open(encoding='utf-8-sig',newline='') as f:

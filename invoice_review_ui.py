@@ -9,6 +9,7 @@ from decimal import Decimal
 import pandas as pd
 import streamlit as st
 from dashboard_data import DATABASE
+from purchase_matching import pack_upc_or_blank
 from invoice_review import (LINE_FIELDS, ACTIONS, EXTRACTION_VERSION, blank_line, extract_document,
     from_csv, classify_lines, validate_review, save_review)
 
@@ -108,12 +109,13 @@ def render_invoice_review(database=None):
                 header[field]=st.text_input(label,value=defaults[field] or '',key=f'{token}_{field}').strip()
     st.caption('Supplier spelling should match purchase history. Use the invoice date from the document, not the upload date.')
     st.subheader('2. Check the invoice lines')
-    st.caption('Edit extracted values, paste spreadsheet cells, or add rows. Keep UPCs and supplier codes as text. Remove subtotal/footer rows. Quantity and unit cost retain their invoice units; extended_price is the final line amount. Empty adjustments and discount mean zero.')
-    edited=st.data_editor(pd.DataFrame(raw_lines,columns=LINE_FIELDS).fillna('').astype(str),
+    st.caption('Matching uses PACK UPC, normalized to 12 digits by padding or removing only extra leading zeros. CASE UPC is retained for reference. Missing or invalid PACK UPC needs review. Edit extracted values, paste spreadsheet cells, or add rows. Keep UPCs and supplier codes as text. Remove subtotal/footer rows. Quantity and unit cost retain their invoice units; extended_price is the final line amount. Empty adjustments and discount mean zero.')
+    edited=st.data_editor(pd.DataFrame(raw_lines,columns=[field for field in LINE_FIELDS if field!='upc']).fillna('').astype(str),
         num_rows='dynamic',hide_index=True,width='stretch',key=f'{token}_source_lines',
-        column_config={field:st.column_config.TextColumn(field.replace('_',' ').title()) for field in LINE_FIELDS})
+        column_config={field:st.column_config.TextColumn('PACK UPC (as supplied)' if field=='pack_upc' else field.replace('_',' ').title()) for field in LINE_FIELDS if field!='upc'})
     raw_records=edited.fillna('').to_dict('records')
     records=[r for r in raw_records if any(str(v).strip() for v in r.values())]
+    for row in records:row['upc']=pack_upc_or_blank(row['pack_upc'])
     signature=hashlib.sha256(json.dumps({'header':header,'lines':records},sort_keys=True).encode()).hexdigest()
     if st.button('Check for new items',type='primary'):
         try:
@@ -131,9 +133,12 @@ def render_invoice_review(database=None):
     cols=st.columns(5)
     for col,status in zip(cols,['Existing item','Previously purchased','Possible match','Potential new item','Unreadable code']):
         col.metric(status,int(result.status.eq(status).sum()))
-    st.caption('Case UPC is kept separate from the retail UPC. Case-to-retail barcode candidates require confirmation. Previously purchased means the item was bought before but still needs a catalog link. Purchase history distinguishes previously purchased items from catalog matches. A possible match is a suggestion, not a link. Confirm new items with a retail UPC; case barcodes and supplier codes are preserved separately.')
-    st.dataframe(result[['product_number','upc','case_upc','description','quantity','unit_cost','unit_of_measure','ppc',
-        'extended_price','status','purchase_history','reason','suggestions']],hide_index=True,width='stretch')
+    st.caption('The normalized UPC comes only from PACK UPC. CASE UPC is never substituted. Supplier history and name suggestions still require review. Previously purchased means the item was bought before but still needs a catalog link. Purchase history distinguishes previously purchased items from catalog matches. A possible match is a suggestion, not a link. Confirm new items with a retail UPC; case barcodes and supplier codes are preserved separately.')
+    st.dataframe(result[['product_number','upc','pack_upc','case_upc','description','quantity','unit_cost','unit_of_measure','ppc',
+        'extended_price','status','purchase_history','reason','suggestions']],hide_index=True,width='stretch',
+        column_config={'upc':st.column_config.TextColumn('PACK UPC (12 digits)'),
+            'pack_upc':st.column_config.TextColumn('Original PACK UPC'),
+            'case_upc':st.column_config.TextColumn('CASE UPC (reference)')})
     st.download_button('Download match report',result.to_csv(index=False).encode('utf-8-sig'),
         'invoice_match_review.csv','text/csv')
     decisions=st.data_editor(result[['description','status','action','confirmed_upc','remember_mapping']],

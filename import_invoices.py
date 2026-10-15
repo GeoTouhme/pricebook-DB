@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 import sqlite3
 from import_pricebook import ROOT
+from purchase_matching import pack_upc_or_blank
 
 HEADERS = ['Vendor Name', 'Retailer Name', 'Retailer Vendor ID', 'Customer ID',
  'Store ID', 'Retailer Relationship ID', 'Process Date', 'Invoice Date',
@@ -102,7 +103,7 @@ def import_invoices(source, database):
                         discount_cents,extended_price,gl_code)
                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                         (invoice,number,row['Product Number'],row['UPC Number'],row['Pack UPC'],
-                         row['UPC Number'] if row['UPC Number'] in products else None,
+                         pack_upc_or_blank(row['Pack UPC']) if pack_upc_or_blank(row['Pack UPC']) in products else None,
                          row['Product Description'],numeric(row['Quantity']),numeric(row['Unit Cost']),
                          row['Unit of Measure'],row['PPC'],cents(row['Total Adjustments']),
                          cents(row['Total Discount']),numeric(row['Extended Price']),row['GL Code'])).lastrowid

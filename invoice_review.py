@@ -13,13 +13,14 @@ import sqlite3
 
 from dashboard_data import ROOT, DATABASE
 from import_invoices import HEADERS, cents, iso, numeric
+from purchase_matching import normalize_pack_upc, pack_upc_or_blank
 
 LINE_FIELDS = ['product_number','upc','description','quantity','unit_cost',
                'unit_of_measure','ppc','pack_upc','adjustments','discount','extended_price','case_upc']
 CSV_FIELDS = dict(zip(LINE_FIELDS, ['Product Number','UPC Number','Product Description',
     'Quantity','Unit Cost','Unit of Measure','PPC','Pack UPC','Total Adjustments',
     'Total Discount','Extended Price']))
-EXTRACTION_VERSION = 2
+EXTRACTION_VERSION = 3
 ACTIONS = ['Review needed','Link existing product','Confirm new item','Keep unlinked']
 
 
@@ -93,6 +94,7 @@ def extract_document(payload, filename):
         warnings.append('No supported line table was found. Read the extracted text and enter the invoice lines below.')
     else:
         warnings.append('PDF table extraction is a draft. Check every line, totals, and identifiers against the original PDF; remove subtotals or repeated headers.')
+    for line in lines:line['upc']=pack_upc_or_blank(line['pack_upc'])
     return {'kind':'pdf','lines':lines,'text':content,'warnings':warnings,'header':header}
 
 
@@ -106,7 +108,13 @@ def from_csv(records):
         'customer_id':first['Customer ID'],'store_id':first['Store ID'],
         'invoice_number':first['Invoice Number'],'invoice_date':iso(first['Invoice Date']),
         'due_date':iso(first['Invoice Due Date']) or '', 'invoice_total':first['Invoice Total']}
-    return header,[{field:r[column] for field,column in CSV_FIELDS.items()} for r in records]
+    lines=[]
+    for r in records:
+        line={field:r[column] for field,column in CSV_FIELDS.items()}
+        line['case_upc']=r['UPC Number'] if len(r['UPC Number'])==14 else ''
+        line['upc']=pack_upc_or_blank(r['Pack UPC'])
+        lines.append(line)
+    return header,lines
 
 
 def read_history(database=DATABASE):
@@ -121,19 +129,6 @@ def read_history(database=DATABASE):
             FROM supplier_product_mappings m JOIN suppliers s ON s.id=m.supplier_id''')] if 'supplier_product_mappings' in tables else []
         candidates=[dict(zip(['retail_upc','description'],r)) for r in db.execute('SELECT retail_upc,description FROM catalog_candidates')] if 'catalog_candidates' in tables else []
     return products,history,mappings,candidates
-
-
-def gs1_check_digit(body):
-    return str((-sum(int(d)*(3 if i%2==0 else 1) for i,d in enumerate(body[::-1])))%10)
-
-
-def case_retail_candidates(barcode):
-    # A valid case GTIN supplies a candidate retail identity, never an automatic link.
-    if not re.fullmatch(r'[0-9]{14}',barcode) or barcode[0]=='9' or gs1_check_digit(barcode[:-1])!=barcode[-1]:
-        return set()
-    body=barcode[1:-1]
-    ean=body+gs1_check_digit(body)
-    return {ean,ean[1:]} if ean.startswith('0') else {ean}
 
 
 def name_tokens(name):
@@ -172,20 +167,20 @@ def classify_lines(lines,supplier,database=DATABASE):
             if len(word)>2:word_index[word].add(p['upc'])
     result=[]
     for line in lines:
-        upc=line['upc'].strip(); code=line['product_number'].strip()
-        source_barcode=upc or line.get('case_upc','').strip()
+        raw_pack=line.get('pack_upc','').strip()
+        pack_error=''
+        try:upc=normalize_pack_upc(raw_pack)
+        except ValueError as exc:upc='';pack_error=str(exc)
+        code=line['product_number'].strip()
         scope=(supplier,code,line['unit_of_measure'].strip(),line['ppc'].strip())
-        prior=[r for r in history if (source_barcode and r['upc']==source_barcode) or
+        prior=[r for r in history if (upc and pack_upc_or_blank(r['pack_upc'])==upc) or
                (code and r['supplier']==supplier and r['product_number']==code)]
         same_supplier=any(r['supplier']==supplier for r in prior)
         suggestions=set()
         for old in prior:
             if old['matched_upc'] and old['unit_of_measure']==line['unit_of_measure'] and old['ppc']==line['ppc']:
                 suggestions.add(old['matched_upc'])
-        for barcode in [upc,line['pack_upc'].strip()]:
-            if barcode in catalog:suggestions.add(barcode)
-        for barcode in [line.get('case_upc','').strip(),upc]:
-            suggestions.update(case_retail_candidates(barcode) & catalog.keys())
+        if upc in catalog:suggestions.add(upc)
         mapped=saved.get(scope) if code else None
         conflict=mapped and upc in catalog and mapped!=upc
         if conflict:
@@ -193,7 +188,7 @@ def classify_lines(lines,supplier,database=DATABASE):
         elif mapped:
             status='Existing item';reason='Confirmed supplier item and pack mapping';match=mapped
         elif upc in catalog:
-            status='Existing item';reason='Exact catalog UPC';match=upc
+            status='Existing item';reason='Exact normalized PACK UPC';match=upc
         else:
             match=''
             if not suggestions and line['description'].strip():
@@ -207,19 +202,22 @@ def classify_lines(lines,supplier,database=DATABASE):
                 suggestions.update(u for score,u in scores[:3] if score>=0.72)
             if suggestions:
                 status='Possible match';reason='Candidate only: confirm barcode, product, and pack size'
-            elif not source_barcode or not re.fullmatch(r'[0-9]{8}|[0-9]{12,14}',source_barcode):
-                status='Unreadable code';reason='Missing or nonstandard barcode; check the PDF'
+            elif not upc:
+                status='Unreadable code';reason=pack_error or 'PACK UPC is missing; check the invoice'
             else:
                 status='Potential new item';reason='No confirmed catalog match'
-        if prior and not match and not conflict and status!='Unreadable code':
+        if pack_error and not match:
+            status='Unreadable code';reason=pack_error
+        if prior and not match and not conflict and not pack_error:
             status='Previously purchased'
             reason='Seen in purchase history; retail catalog link needs confirmation'
+        if not raw_pack:reason+='; PACK UPC is missing'
         if upc in candidate_upcs:
             if status=='Potential new item':status='Possible match'
             reason+='; already on the pending new-item list'
         if prior:history_label='Seen from this supplier' if same_supplier else 'Seen from another supplier'
         else:history_label='Not seen in imported purchase history'
-        result.append({**line,'status':status,'reason':reason,'purchase_history':history_label,
+        result.append({**line,'upc':upc,'status':status,'reason':reason,'purchase_history':history_label,
             'suggestions':'; '.join(f'{u} — {catalog[u]}' for u in sorted(suggestions) if u in catalog),
             'action':'Link existing product' if match else 'Review needed',
             'confirmed_upc':match,'remember_mapping':False})
@@ -255,6 +253,7 @@ def validate_review(header,lines):
             cents(row[field])
         if not row['unit_of_measure']:raise ValueError(f'Line {index}: unit of measure is required')
         if row['ppc'] and Decimal(decimal_text(row['ppc'],'PPC'))<0:raise ValueError('PPC cannot be negative')
+        row['upc']=pack_upc_or_blank(row['pack_upc'])
         normalized.append(row)
     difference=Decimal(total)/100-sum(Decimal(r['extended_price']) for r in normalized)
     return normalized,difference
@@ -276,11 +275,14 @@ def save_review(payload,filename,header,decisions,acknowledge_difference=False,d
         action=decision.get('action','Review needed');upc=str(decision.get('confirmed_upc','')).strip()
         if action not in ACTIONS[1:]:raise ValueError(f'Line {index} still needs review')
         if action=='Link existing product' and upc not in catalog:
-            raise ValueError(f'Line {index}: choose an existing catalog UPC')
+            upc=normalize_pack_upc(upc)
+            if upc not in catalog:raise ValueError(f'Line {index}: choose an existing catalog UPC')
         if action=='Confirm new item':
             if upc in catalog:raise ValueError(f'Line {index}: UPC already exists; link it instead')
-            if not re.fullmatch(r'[0-9]{8}|[0-9]{12,13}',upc):
-                raise ValueError(f'Line {index}: enter the full retail UPC (8, 12, or 13 digits) for a new item')
+            upc=normalize_pack_upc(upc)
+            if not re.fullmatch(r'[0-9]{12}',upc):
+                raise ValueError(f'Line {index}: enter a 12-digit retail UPC for a new item')
+            if upc in catalog:raise ValueError(f'Line {index}: normalized UPC already exists; link it instead')
         if decision.get('remember_mapping') and (action!='Link existing product' or not row['product_number']):
             raise ValueError(f'Line {index}: a saved mapping needs an existing product and supplier product number')
         confirmed.append((action,upc,bool(decision.get('remember_mapping'))))
@@ -318,7 +320,7 @@ def save_review(payload,filename,header,decisions,acknowledge_difference=False,d
                 (invoice_id,line_number,product_number,source_upc,pack_upc,matched_upc,description,
                  quantity,unit_cost,unit_of_measure,ppc,adjustments_cents,discount_cents,extended_price,gl_code)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-                (invoice,index,row['product_number'],row['upc'] or row['case_upc'],row['pack_upc'],linked,row['description'],
+                (invoice,index,row['product_number'],row['upc'],row['pack_upc'],linked,row['description'],
                  row['quantity'],row['unit_cost'],row['unit_of_measure'],row['ppc'],cents(row['adjustments']),
                  cents(row['discount']),row['extended_price'],'')).lastrowid
             db.execute('INSERT INTO purchase_source_rows VALUES (?,?,?,?,?)',

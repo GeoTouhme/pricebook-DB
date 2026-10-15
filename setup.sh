@@ -8,3 +8,5 @@ python3 -m venv /workspace/.venvs/pricebook
 /workspace/.venvs/pricebook/bin/python import_daily_sales.py data/itemsales_by_day.csv
 /workspace/.venvs/pricebook/bin/python import_daily_sales.py 'data/itemsales_by_day 9-10 corrected.csv'
 /workspace/.venvs/pricebook/bin/python import_invoices.py data/invoices/*.csv
+
+/workspace/.venvs/pricebook/bin/python purchase_matching.py
