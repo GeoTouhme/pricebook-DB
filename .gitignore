@@ -1,9 +1,40 @@
 __pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local databases and their journals/backups.
 *.sqlite3
 *.sqlite3-*
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+/data/
+/backups/
+*.log
 
 .venv/
+venv/
 .streamlit/accounts.json
 .streamlit/.accounts-*
-.streamlit/secrets.toml
+**/secrets.toml
 .env
+.env.*
+
+# Local service credentials and private keys.
+.cloudflared/
+.aws/
+.ssh/
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local editor/agent state.
+.codex/
+.agents/
+.DS_Store

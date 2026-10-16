@@ -6,6 +6,44 @@ from streamlit.testing.v1 import AppTest
 from dashboard_data import ROOT, load_data, reconcile, sales_coverage
 
 class DashboardTests(unittest.TestCase):
+    def test_sales_preview_is_opt_in_and_paginated(self):
+        app = logged_in_app(str(ROOT/'dashboard.py'), default_timeout=30)
+        app.date_input[0].set_value((date(2026,5,1),date(2026,8,15))).run()
+        self.assertFalse(app.checkbox(key='show_sales_table').value)
+        app.checkbox(key='show_sales_table').set_value(True).run()
+        data = load_data()['sales']
+        expected = data[data.sale_date.between('2026-05-01', '2026-08-15')].drop(columns='import_id')
+        # Coverage is first; sales preview is the next table.
+        self.assertEqual(len(app.dataframe[1].value), 200)
+        self.assertEqual(app.dataframe[1].value.source_upc.tolist(), expected.iloc[:200].source_upc.tolist())
+        app.number_input(key='sales_preview_page').set_value(2).run()
+        self.assertEqual(app.dataframe[1].value.source_upc.tolist(), expected.iloc[200:400].source_upc.tolist())
+        app.number_input(key='sales_preview_page').set_value(100).run()
+        app.date_input[0].set_value((date(2026,8,12),date(2026,8,12))).run()
+        self.assertEqual(app.number_input(key='sales_preview_page').value, 4)
+        self.assertEqual(len(app.exception), 0)
+
+    def test_non_moving_review_filters_and_download(self):
+        app = logged_in_app(str(ROOT/'dashboard.py'), default_timeout=30)
+        self.assertEqual(len(app.exception), 0)
+        self.assertTrue(app.checkbox(key='non_moving_stocked').value)
+        app.text_input(key='non_moving_search').set_value('no-such-product-xyz').run()
+        self.assertTrue(any('No non-moving items match' in item.value for item in app.info))
+        app.checkbox(key='non_moving_stocked').set_value(False).run()
+        app.text_input(key='non_moving_search').set_value('').run()
+        self.assertEqual(len(app.exception), 0)
+
+    def test_mobile_and_sidebar_navigation_stay_in_sync(self):
+        app = logged_in_app(str(ROOT/'dashboard.py'), default_timeout=30)
+        app.selectbox(key='mobile_page').set_value('Products').run()
+        self.assertEqual(app.radio(key='navigation').value, 'Products')
+        self.assertEqual(app.title[0].value, 'Products')
+        self.assertEqual(len(app.exception), 0)
+        app.radio(key='navigation').set_value('Inventory').run()
+        self.assertEqual(app.selectbox(key='mobile_page').value, 'Inventory')
+        self.assertEqual(app.title[0].value, 'Inventory')
+        self.assertEqual(len(app.exception), 0)
+
     def test_coverage_and_exact_reconciliation(self):
         data=load_data()
         coverage=sales_coverage(data['sales']).set_index('Month')

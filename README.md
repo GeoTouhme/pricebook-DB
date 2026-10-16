@@ -446,10 +446,40 @@ matching, reviewed saving, duplicate rejection, and the dashboard receipt.
 
 ### Dashboard appearance
 
+On phones, use the **Page** selector above the page title to navigate. Filters,
+charts, and statistic cards stack vertically, with larger touch controls and
+full-width action buttons. Wide tables can be scrolled horizontally to see all
+columns. The sidebar remains available for account actions and data refresh.
+
+Large catalog, inventory comparison, non-moving, and sales tables use 200-row
+pages to reduce transfers on mobile connections. In **Sales data and download**,
+enable **Show sales table** to load the sales preview. CSV downloads still
+include all filtered rows and are generated on request, without rerunning the
+dashboard. Closing an expander alone does not defer its contents in Streamlit.
+
+The sales timeline's **Chart detail** control defaults to **Auto**: daily for
+up to 31 days, weekly for up to 180 days, and monthly for longer selections.
+Choose **Daily** for individual dates. Bar details show the selected period's
+dates and reporting coverage. Totals only include the selected date range;
+missing reports remain missing, and edge weeks or months may be partial.
+
+Overview also includes **Non-moving items · review before reordering**, using
+the selected dates and current catalog department filters. It lists catalog
+items without positive recorded quantity, Sales $, or Scan Sales in that range,
+regardless of the chart measure or report-row filter. By default it shows only
+positive price-book stock, highest stock first, with search and a CSV download.
+Last recorded sale uses available exact-UPC sales through the selected end date.
+Returns do not cancel evidence of a purchase. Missing reports, unmatched UPCs,
+new listings, and unavailable items require review; this list does not prove
+zero customer demand. Price-book stock has no confirmed count date.
+
 Open the top-right **⋮ → Settings** menu and select **Dark**, **Light**, or
-**Use system setting** under “Choose app theme, colors and fonts.” Streamlit
-remembers the selection in this browser. **Custom Theme** restores the original
-blue and white palette. Charts, tables, inputs, the sidebar, and statistic cards
+**Use system setting** in the appearance controls. Streamlit
+remembers the selection in this browser. **Light** uses the original
+blue and white palette; **Dark** uses a navy palette. Both palettes are defined
+in `.streamlit/config.toml` so the native theme selector remains available.
+Restart Streamlit and refresh the browser if the selector is missing after updating.
+Charts, tables, inputs, the sidebar, and statistic cards
 follow the selected theme; navigation and animated counters keep their behavior.
 
 ### Upload updated catalog and website inventory

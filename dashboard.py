@@ -7,6 +7,8 @@ import streamlit as st
 from sidebar_style import sidebar_css
 from animated_number import install_animated_numbers
 from theme_style import install_theme_support
+from mobile_style import MOBILE_CSS
+from table_ui import table_page
 from chart_animation import install_chart_animations
 from dashboard_data import (DATABASE, load_data, reconcile, sales_coverage,
                             SALES_DEPARTMENT_GROUPS, filter_sales_departments)
@@ -14,6 +16,7 @@ from dashboard_data import (DATABASE, load_data, reconcile, sales_coverage,
 LOGO = Path(__file__).resolve().parent / 'logojpg.jpg'
 st.set_page_config(page_title='Bal-Port Liquors · Store dashboard',
                    page_icon=str(LOGO) if LOGO.is_file() else 'B', layout='wide')
+st.markdown(MOBILE_CSS, unsafe_allow_html=True)
 from auth import require_login
 require_login()
 
@@ -40,6 +43,12 @@ sales, products, inventory, invoices, lines = [data[k] for k in
 
 navigation = ['Overview', 'Products', 'Inventory', 'Purchases',
               'New Items Review', 'Data quality', 'Data imports', 'Delivery platforms']
+
+
+def sync_navigation(source, target):
+    st.session_state[target] = st.session_state[source]
+
+
 def toggle_sidebar():
     st.session_state.sidebar_pinned = not st.session_state.get('sidebar_pinned', False)
 
@@ -56,7 +65,8 @@ with st.sidebar:
               help='Pin the menu open or return to the compact icon rail.')
     st.divider()
     page = st.radio('Navigate', navigation,
-        label_visibility='collapsed', key='navigation')
+        label_visibility='collapsed', key='navigation',
+        on_change=sync_navigation, args=('navigation', 'mobile_page'))
     with st.container(key='sidebar_details'):
         st.divider()
         with st.expander('Data summary'):
@@ -68,6 +78,10 @@ with st.sidebar:
                      help='Reload the latest imports.'):
             st.cache_data.clear()
             st.rerun()
+with st.container(key='mobile_navigation'):
+    st.selectbox('Page', navigation, key='mobile_page',
+                 index=navigation.index(page), on_change=sync_navigation,
+                 args=('mobile_page', 'navigation'))
 st.title(page)
 
 
@@ -85,10 +99,10 @@ def table(frame, label, key):
         'ppc':'Units per pack', 'extended_price':'Line total', 'adjustments_cents':'Adjustments (cents)',
         'discount_cents':'Discount (cents)', 'invoice_date':'Invoice date', 'supplier':'Supplier',
         'invoice_number':'Invoice number', 'due_date':'Due date', 'item_count':'Lines', 'id':'Record ID'}
-    st.dataframe(frame,hide_index=True,width='stretch',
+    st.dataframe(table_page(frame, key),hide_index=True,width='stretch',
         column_config={field:st.column_config.Column(label) for field,label in labels.items() if field in frame})
-    st.download_button(label,csv_bytes(frame),
-        file_name=f'{key}.csv',mime='text/csv',key=key)
+    st.download_button(label,lambda: csv_bytes(frame),
+        file_name=f'{key}.csv',mime='text/csv',key=key,on_click='ignore')
 
 
 def dates(frame,column,key):

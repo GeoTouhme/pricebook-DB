@@ -4,6 +4,9 @@ import altair as alt
 import pandas as pd
 import streamlit as st
 from dashboard_data import SALES_DEPARTMENT_GROUPS, filter_sales_departments, sales_coverage
+from sales_chart import chart_periods
+from non_moving import non_moving_products
+from table_ui import table_page
 
 
 def render_overview(sales, products):
@@ -56,12 +59,29 @@ def render_overview(sales, products):
     if current.empty:
         st.info('No sales rows match these filters.')
     else:
-        st.subheader('Daily sales')
+        st.subheader('Sales over time')
+        grouping = st.selectbox('Chart detail', ['Auto', 'Daily', 'Weekly', 'Monthly'],
+            key='sales_chart_detail',
+            help='Auto shows days for up to 31 days, weeks for up to 180 days, and months for longer ranges.')
         # Null dates remain gaps, never invented zero-sale observations.
         daily = current.groupby('sale_date')[column].sum() / 100
         daily = daily.reindex(pd.date_range(start, end, freq='D')).rename(measure)
         daily.index.name = 'Date'
-        st.bar_chart(daily, y_label=measure, color='#2563eb', height=280)
+        coverage = pd.Series(daily.index.isin(period.sale_date.unique()), index=daily.index)
+        interval, chart_data = chart_periods(daily, coverage, grouping)
+        st.caption(f'{interval} totals · Only dates within your selected range are included. '
+                   'Missing reports are excluded; edge periods may be partial. Tap a bar for dates and reporting coverage.')
+        chart = alt.Chart(chart_data).mark_bar(color='#2563eb', cornerRadiusEnd=2,
+            size=max(2, min(18, 220 / len(chart_data)))).encode(
+            x=alt.X('Start:T', title=None,
+                axis=alt.Axis(format='%b %d', tickCount=4, labelAngle=0, labelOverlap=True)),
+            y=alt.Y('Amount:Q', title=measure, axis=alt.Axis(format='~s', tickCount=4)),
+            tooltip=[alt.Tooltip('Start:T', title='From', format='%b %d, %Y'),
+                     alt.Tooltip('End:T', title='Through', format='%b %d, %Y'),
+                     alt.Tooltip('Amount:Q', title=measure, format='$,.2f'),
+                     alt.Tooltip('Coverage:N', title='Reports')]
+        ).properties(height=280)
+        st.altair_chart(chart, width='stretch')
         left, right = st.columns(2)
         with left:
             st.subheader('Top departments')
@@ -94,6 +114,41 @@ def render_overview(sales, products):
         a.metric('Report rows', f'{len(current):,}')
         b.metric('Rows linked to products', f'{current.matched_upc.notna().mean():.1%}' if len(current) else '—')
         export = current.drop(columns=['import_id']).rename(columns={'sales_cents': 'Sales cents', 'scan_sales_cents': 'Scan Sales cents'})
-        st.dataframe(export, hide_index=True, width='stretch')
-        st.download_button('Download filtered sales', csv_bytes(export),
-            file_name='filtered_sales.csv', mime='text/csv', key='filtered_sales')
+        if st.checkbox('Show sales table', key='show_sales_table'):
+            st.dataframe(table_page(export, 'sales_preview'), hide_index=True, width='stretch')
+        st.download_button('Download filtered sales', lambda: csv_bytes(export),
+            file_name='filtered_sales.csv', mime='text/csv', key='filtered_sales', on_click='ignore')
+    st.subheader('Non-moving items · review before reordering')
+    st.caption(f'No positive recorded quantity, Sales $, or Scan Sales from {start:%b %d, %Y} '
+               f'to {end:%b %d, %Y}, using exact catalog UPC matches. '
+               'Department filters use current catalog departments. This review is independent of the sales measure and report-row filter.')
+    if not reported_days:
+        st.info('No reports in this date range. Import sales reports before reviewing non-moving items.')
+        return
+    unmatched = period.matched_upc.isna().sum()
+    st.warning(f'{reported_days} of {expected_days} dates reported; {unmatched:,} report rows have no catalog match. '
+               'Missing reports or UPC mismatches can hide sales. New or unavailable items may not have had a chance to sell. '
+               'Price-book stock has no confirmed count date; check physical stock and availability before changing orders.')
+    stocked_only = st.checkbox('Only items with positive price-book stock', value=True,
+                               key='non_moving_stocked')
+    term = st.text_input('Find a non-moving item', placeholder='Product name or UPC',
+                         key='non_moving_search').strip()
+    candidates = non_moving_products(sales, products, start, end, departments)
+    if stocked_only:
+        candidates = candidates[candidates.stock_number.gt(0)]
+    if term:
+        candidates = candidates[candidates['name'].str.contains(term, case=False, regex=False, na=False)
+                                | candidates.upc.str.contains(term, regex=False, na=False)]
+    st.caption(f'{len(candidates):,} items to review · Last sale is based on available reports through {end:%b %d, %Y}.')
+    if candidates.empty:
+        st.info('No non-moving items match these filters.')
+    else:
+        view = candidates[['name', 'pricebook_stock', 'last_sale', 'days_since_sale',
+                           'history', 'upc', 'size', 'department']].rename(columns={
+            'name': 'Product', 'size': 'Size', 'upc': 'UPC', 'department': 'Department',
+            'pricebook_stock': 'Price-book stock', 'last_sale': 'Last recorded sale',
+            'days_since_sale': 'Days since recorded sale', 'history': 'Review reason'})
+        st.dataframe(table_page(view, 'non_moving'), hide_index=True, width='stretch',
+                     column_config={'Last recorded sale': st.column_config.DateColumn(format='MMM D, YYYY')})
+        st.download_button('Download reorder review', lambda: csv_bytes(view),
+                           file_name='non_moving_items.csv', mime='text/csv', key='non_moving_download', on_click='ignore')
