@@ -14,15 +14,17 @@
     const dark = (+rgb[0] * .2126 + +rgb[1] * .7152 + +rgb[2] * .0722) < 128;
     const values = {
       '--dashboard-text': style.color,
-      '--dashboard-card': dark ? '#1e293b' : '#f1f5f9',
-      '--dashboard-sidebar': dark ? '#111c30' : '#f1f5f9',
-      '--dashboard-border': dark ? '#334155' : '#e2e8f0',
-      '--dashboard-hover': dark ? '#26364d' : '#e2e8f0',
-      '--dashboard-selected': dark ? '#243d61' : '#dbeafe',
-      '--dashboard-selected-border': dark ? '#365784' : '#bfdbfe',
-      '--dashboard-brand': dark ? '#dbeafe' : '#172554',
-      '--dashboard-muted': dark ? '#a8b8cf' : '#64748b',
-      '--dashboard-accent': dark ? '#93c5fd' : '#2563eb',
+      '--dashboard-canvas': dark ? '#1c1917' : '#fafaf9',
+      '--dashboard-wash': dark ? '#164363' : '#c1e1f7',
+      '--dashboard-card': dark ? '#292524' : '#ffffff',
+      '--dashboard-sidebar': dark ? '#1c1917' : '#ffffff',
+      '--dashboard-border': dark ? '#44403c' : '#e8e6e5',
+      '--dashboard-hover': dark ? '#292524' : '#e8e6e5',
+      '--dashboard-selected': dark ? '#292524' : '#f5f5f4',
+      '--dashboard-selected-border': dark ? '#57534e' : '#e8e6e5',
+      '--dashboard-brand': dark ? '#f5f5f4' : '#0c0a09',
+      '--dashboard-muted': dark ? '#a8a29e' : '#78716c',
+      '--dashboard-accent': dark ? '#3ba6f1' : '#3ba6f1',
       '--dashboard-icon-filter': dark ? 'brightness(0) invert(1)' : 'none',
     };
     for (const [name, value] of Object.entries(values)) {

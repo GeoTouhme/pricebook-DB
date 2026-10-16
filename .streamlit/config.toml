@@ -1,21 +1,38 @@
 [theme]
-font = "sans serif"
+base = "light"
+font = "Inter, sans-serif"
+headingFont = "Inter Tight, sans-serif"
+headingFontWeights = 400
+baseFontSize = 14
+
+[[theme.fontFaces]]
+family = "Inter"
+url = "app/static/fonts/inter.woff2"
+weight = "400 600"
+style = "normal"
+
+[[theme.fontFaces]]
+family = "Inter Tight"
+url = "app/static/fonts/intertight.woff2"
+weight = "400 600"
+style = "normal"
 
 [theme.light]
-primaryColor = "#2563eb"
-backgroundColor = "#ffffff"
-secondaryBackgroundColor = "#f1f5f9"
-textColor = "#172554"
+primaryColor = "#3ba6f1"
+backgroundColor = "#fafaf9"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#0c0a09"
 
 [theme.dark]
-primaryColor = "#60a5fa"
-backgroundColor = "#0f172a"
-secondaryBackgroundColor = "#1e293b"
-textColor = "#e2e8f0"
+primaryColor = "#3ba6f1"
+backgroundColor = "#1c1917"
+secondaryBackgroundColor = "#292524"
+textColor = "#fafaf9"
 
 [browser]
 gatherUsageStats = false
 [server]
+enableStaticServing = true
 address = "127.0.0.1"
 headless = true
 maxUploadSize = 20

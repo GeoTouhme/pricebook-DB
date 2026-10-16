@@ -10,7 +10,7 @@ import streamlit as st
 from delivery_reports import validate_batch, parse_batch, preview_uploads, save_uploads, load_reports, total
 from delivery_metrics import summarize, common_period, quality_details
 
-COLORS=alt.Scale(domain=['DoorDash','Uber Eats'],range=['#2563eb','#93c5fd'])
+COLORS=alt.Scale(domain=['DoorDash','Uber Eats'],range=['#3ba6f1','#d6d3d1'])
 
 
 def prose(value):
@@ -29,8 +29,8 @@ def bars(rows,x,y,color=None):
     chart=alt.Chart(frame).mark_bar(cornerRadiusEnd=4).encode(
         x=alt.X(x,type='quantitative',title=None),y=alt.Y(y,type='nominal',sort=[r[y] for r in sorted(rows,key=lambda r:r[x],reverse=True)],title=None),
         tooltip=list(frame.columns))
-    chart=chart.encode(color=alt.Color(color,scale=COLORS,legend=None)) if color else chart.encode(color=alt.value('#3b82f6'))
-    label=chart.mark_text(align='right',dx=-5).encode(text=alt.Text(x,type='quantitative',format=',.2f' if x=='Sales ($)' else ',d'),color=alt.condition(alt.datum.Platform=='Uber Eats',alt.value('#172554'),alt.value('white')) if color else alt.value('white'))
+    chart=chart.encode(color=alt.Color(color,scale=COLORS,legend=None)) if color else chart.encode(color=alt.value('#3ba6f1'))
+    label=chart.mark_text(align='right',dx=-5).encode(text=alt.Text(x,type='quantitative',format=',.2f' if x=='Sales ($)' else ',d'),color=alt.value('#0c0a09'))
     st.altair_chart((chart+label).properties(height=max(130,len(rows)*40)),use_container_width=True)
 
 
@@ -45,9 +45,9 @@ def waterfall(steps,final):
         st.warning(f'Unallocated bridge difference: {usd(final-running)}. Review the source before relying on proceeds.')
     base=alt.Chart(pd.DataFrame(rows)).encode(y=alt.Y('Step:N',sort=[r['Step'] for r in rows],title=None))
     chart=base.mark_bar().encode(x=alt.X('From:Q',title='USD'),x2='To:Q',
-        color=alt.condition(alt.datum.Change<0,alt.value('#93c5fd'),alt.value('#2563eb')),
+        color=alt.condition(alt.datum.Change<0,alt.value('#d6d3d1'),alt.value('#3ba6f1')),
         tooltip=['Step','Label'])
-    labels=base.mark_text(align='right',dx=-5).encode(x='To:Q',text='Label:N',color=alt.condition(alt.datum.Change<=0,alt.value('#172554'),alt.value('white')))
+    labels=base.mark_text(align='right',dx=-5).encode(x='To:Q',text='Label:N',color=alt.value('#0c0a09'))
     st.altair_chart((chart+labels).properties(height=len(rows)*44),use_container_width=True)
 
 
@@ -145,7 +145,7 @@ def render_delivery(database):
         for p in platforms:
             for d,v in sorted(m[p]['daily'].items()):writer.writerow([p,d,v['orders'],str(v['sales'])])
         st.download_button('Download daily totals',out.getvalue(),file_name='delivery-daily.csv',mime='text/csv')
-        brief='<html><meta name="viewport" content="width=device-width"><title>Delivery summary</title><body style="font:18px system-ui;color:#172554"><h1>Delivery platforms</h1><p>'+html.escape(start+' – '+end)+'</p>'
+        brief='<html><meta name="viewport" content="width=device-width"><title>Delivery summary</title><body style="font:18px system-ui;color:#0c0a09"><h1>Delivery platforms</h1><p>'+html.escape(start+' – '+end)+'</p>'
         for p in platforms: brief+=f'<h2>{html.escape(p)}</h2><p>{usd(m[p]["sales"])} completed sales · {m[p]["orders"]} orders · {usd(m[p]["average"])} average basket</p>'
         brief+='<p>Sales before platform charges and product costs. Separate from POS totals. Print using your browser.</p></body></html>'
         st.download_button('Download printable summary',brief,file_name='delivery-owner-summary.html',mime='text/html')

@@ -1,5 +1,5 @@
-from safe_exports import csv_bytes
 """Streamlit invoice review page; parsing never writes purchases."""
+from safe_exports import csv_bytes
 import base64
 from collections import defaultdict
 from contextlib import closing

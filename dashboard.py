@@ -1,5 +1,5 @@
-from safe_exports import csv_bytes
 """Pricebook dashboard. Run with streamlit run dashboard.py."""
+from safe_exports import csv_bytes
 from datetime import date
 from pathlib import Path
 import pandas as pd
@@ -8,6 +8,7 @@ from sidebar_style import sidebar_css
 from animated_number import install_animated_numbers
 from theme_style import install_theme_support
 from mobile_style import MOBILE_CSS
+from dashboard_style import DASHBOARD_CSS
 from table_ui import table_page
 from chart_animation import install_chart_animations
 from dashboard_data import (DATABASE, load_data, reconcile, sales_coverage,
@@ -16,18 +17,13 @@ from dashboard_data import (DATABASE, load_data, reconcile, sales_coverage,
 LOGO = Path(__file__).resolve().parent / 'logojpg.jpg'
 st.set_page_config(page_title='Bal-Port Liquors · Store dashboard',
                    page_icon=str(LOGO) if LOGO.is_file() else 'B', layout='wide')
+st.markdown(DASHBOARD_CSS, unsafe_allow_html=True)
 st.markdown(MOBILE_CSS, unsafe_allow_html=True)
+install_theme_support()
 from auth import require_login
 require_login()
 
-st.markdown('''<style>
-.block-container {padding-top:2rem;max-width:1500px;}
-[data-testid="stMetric"] {background:var(--dashboard-card, #f1f5f9);border-radius:12px;padding:16px;}
-[data-testid="stMetricLabel"], [data-testid="stMetricValue"] {color:var(--dashboard-text, #172554);}
-</style>''',unsafe_allow_html=True)
-
 install_animated_numbers()
-install_theme_support()
 install_chart_animations()
 
 @st.cache_data(show_spinner=False)
@@ -155,7 +151,7 @@ elif page == 'Products':
             st.info('No sales linked to this UPC. Unmatched sales may be excluded.')
         else:
             daily=history.groupby('sale_date').sales_cents.sum()/100
-            st.bar_chart(daily.rename('Reported Sales $'))
+            st.bar_chart(daily.rename('Reported Sales $'), color='#3ba6f1')
         purchase_history=lines[lines.matched_upc==chosen].merge(invoices[['id','invoice_date','supplier','invoice_number']],left_on='invoice_id',right_on='id')
         if not purchase_history.empty:
             st.subheader('Purchase history')
@@ -198,10 +194,10 @@ elif page == 'Purchases':
         left,right=st.columns(2)
         with left:
             st.subheader('Monthly invoice totals')
-            st.bar_chart(current.groupby(current.invoice_date.dt.strftime('%Y-%m')).total_cents.sum()/100,y_label='Amount ($)')
+            st.bar_chart(current.groupby(current.invoice_date.dt.strftime('%Y-%m')).total_cents.sum()/100,y_label='Amount ($)',color='#3ba6f1')
         with right:
             st.subheader('Suppliers · top 15')
-            st.bar_chart((current.groupby('supplier').total_cents.sum()/100).nlargest(15),horizontal=True)
+            st.bar_chart((current.groupby('supplier').total_cents.sum()/100).nlargest(15),horizontal=True,color='#3ba6f1')
         display=current[['id','invoice_date','supplier','invoice_number','due_date','total_cents','item_count']].copy()
         display['Invoice total $']=display.pop('total_cents')/100
         table(display,'Download invoices','invoices')

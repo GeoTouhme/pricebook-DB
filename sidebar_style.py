@@ -19,18 +19,18 @@ def sidebar_css(pinned=False):
         '[data-testid="stSidebar"]:is(:hover, :focus-within)')
     icons = []
     for i, paths in enumerate(ICONS, 1):
-        svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#172554" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">{paths}</svg>'
+        svg = f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="#0c0a09" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">{paths}</svg>'
         icons.append(f'''[data-testid="stSidebar"] [role="radiogroup"] > label:nth-child({i})::before {{
             background-image:url("data:image/svg+xml,{quote(svg, safe='')}"); }}''')
     return '<style>' + '''
-[data-testid="stSidebar"] {background:var(--dashboard-sidebar, #f1f5f9) !important;border-right:1px solid var(--dashboard-border, #e2e8f0);}
+[data-testid="stSidebar"] {background:var(--dashboard-sidebar, #ffffff) !important;border-right:1px solid var(--dashboard-border, #e8e6e5);}
 [data-testid="stSidebarContent"] {padding-left:0 !important;padding-right:0 !important;scrollbar-gutter:auto;}
 [data-testid="stSidebarUserContent"] {padding:1.1rem 1rem;}
 [data-testid="stSidebar"] [role="radiogroup"] {gap:8px;}
 [data-testid="stSidebar"] [role="radiogroup"] > label {
     position:relative;display:flex;align-items:center;gap:13px;
     min-height:48px;padding:10px 13px;border:1px solid transparent;
-    border-radius:13px;white-space:nowrap;overflow:hidden;
+    border-radius:10px;white-space:nowrap;overflow:hidden;
     transition:background .2s ease,border-color .2s ease,box-shadow .2s ease;
 }
 [data-testid="stSidebar"] [role="radiogroup"] > label > div:first-child {display:none;}
@@ -39,24 +39,24 @@ def sidebar_css(pinned=False):
     content:"";width:22px;height:22px;flex:0 0 22px;
     background-size:contain;background-position:center;background-repeat:no-repeat;
 }
-[data-testid="stSidebar"] [role="radiogroup"] > label:hover {background:var(--dashboard-hover, #e2e8f0);}
+[data-testid="stSidebar"] [role="radiogroup"] > label:hover {background:var(--dashboard-hover, #e8e6e5);}
 [data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked) {
-    background:var(--dashboard-selected, #dbeafe);border-color:var(--dashboard-selected-border, #bfdbfe);box-shadow:0 2px 4px #17255408;
+    background:var(--dashboard-selected, #f5f5f4);border-color:var(--dashboard-selected-border, #e8e6e5);box-shadow:none;
 }
 [data-testid="stSidebar"] [role="radiogroup"] > label:has(input:checked)::after {
     content:"";position:absolute;left:0;top:15px;bottom:15px;width:3px;
-    border-radius:4px;background:var(--dashboard-accent, #2563eb);
+    border-radius:4px;background:var(--dashboard-accent, #3ba6f1);
 }
 [data-testid="stSidebar"] [role="radiogroup"] > label:focus-within {
-    outline:2px solid var(--dashboard-accent, #2563eb);outline-offset:2px;
+    outline:2px solid var(--dashboard-accent, #3ba6f1);outline-offset:2px;
 }
 .sidebar-brand {display:flex;align-items:center;gap:13px;height:52px;white-space:nowrap;overflow:hidden;}
 .sidebar-monogram {flex:0 0 48px;height:48px;display:grid;place-items:center;
-    background:#172554;color:white;border-radius:14px;font:bold 21px Georgia,serif;}
-.sidebar-brand-name {font-weight:650;color:var(--dashboard-brand, #172554);font-size:16px;}
-.sidebar-brand-name small {display:block;color:var(--dashboard-muted, #64748b);font-weight:400;font-size:12px;margin-top:3px;}
-.st-key-sidebar_toggle button {height:48px;white-space:nowrap;border-color:var(--dashboard-border, #e2e8f0);background:transparent;border-radius:12px;}
-.st-key-sidebar_toggle button:focus:not(:active) {box-shadow:0 0 0 2px var(--dashboard-accent, #2563eb);}
+    background:var(--dashboard-hover, #f5f5f4);color:var(--dashboard-brand, #0c0a09);border:1px solid var(--dashboard-border, #e8e6e5);border-radius:10px;font:500 21px "Inter Tight",sans-serif;}
+.sidebar-brand-name {font-weight:500;color:var(--dashboard-brand, #0c0a09);font-size:16px;}
+.sidebar-brand-name small {display:block;color:var(--dashboard-muted, #78716c);font-weight:400;font-size:12px;margin-top:3px;}
+.st-key-sidebar_toggle button {height:48px;white-space:nowrap;border-color:var(--dashboard-border, #e8e6e5);background:transparent;border-radius:9999px;}
+.st-key-sidebar_toggle button:focus:not(:active) {box-shadow:0 0 0 2px var(--dashboard-accent, #3ba6f1);}
 @media (min-width: 769px) {
     [data-testid="stSidebar"][aria-expanded="true"] {
         width:84px !important;min-width:84px !important;max-width:280px !important;

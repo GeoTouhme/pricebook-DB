@@ -1,5 +1,5 @@
-from safe_exports import csv_bytes
 """Sales overview focused on the selected reporting period."""
+from safe_exports import csv_bytes
 import altair as alt
 import pandas as pd
 import streamlit as st
@@ -14,16 +14,17 @@ def render_overview(sales, products):
         st.info('No sales reports yet. Import a sales report to get started.')
         return
     first, latest = sales.sale_date.min().date(), sales.sale_date.max().date()
-    left, middle, right = st.columns([1.3, 1.3, 1])
-    with left:
-        selected = st.date_input('Date range', value=(max(first, latest.replace(day=1)), latest),
-            min_value=first, max_value=latest, key='sales_dates')
-    with middle:
-        departments = st.multiselect('Sales departments',
-            [*SALES_DEPARTMENT_GROUPS, *sorted(sales.department.unique())])
-    with right:
-        measure = st.selectbox('Sales measure', ['Sales $', 'Scan Sales'], key='sales_measure',
-            help='Separate POS report fields. They are not added together; neither is verified net revenue.')
+    with st.container(border=True, key='overview_filters'):
+        left, middle, right = st.columns([1.3, 1.3, 1])
+        with left:
+            selected = st.date_input('Date range', value=(max(first, latest.replace(day=1)), latest),
+                min_value=first, max_value=latest, key='sales_dates')
+        with middle:
+            departments = st.multiselect('Sales departments',
+                [*SALES_DEPARTMENT_GROUPS, *sorted(sales.department.unique())])
+        with right:
+            measure = st.selectbox('Sales measure', ['Sales $', 'Scan Sales'], key='sales_measure',
+                help='Separate POS report fields. They are not added together; neither is verified net revenue.')
     if not isinstance(selected, (tuple, list)) or len(selected) != 2:
         st.info('Choose a start and end date.')
         return
@@ -59,40 +60,40 @@ def render_overview(sales, products):
     if current.empty:
         st.info('No sales rows match these filters.')
     else:
-        st.subheader('Sales over time')
-        grouping = st.selectbox('Chart detail', ['Auto', 'Daily', 'Weekly', 'Monthly'],
-            key='sales_chart_detail',
-            help='Auto shows days for up to 31 days, weeks for up to 180 days, and months for longer ranges.')
-        # Null dates remain gaps, never invented zero-sale observations.
-        daily = current.groupby('sale_date')[column].sum() / 100
-        daily = daily.reindex(pd.date_range(start, end, freq='D')).rename(measure)
-        daily.index.name = 'Date'
-        coverage = pd.Series(daily.index.isin(period.sale_date.unique()), index=daily.index)
-        interval, chart_data = chart_periods(daily, coverage, grouping)
-        st.caption(f'{interval} totals · Only dates within your selected range are included. '
-                   'Missing reports are excluded; edge periods may be partial. Tap a bar for dates and reporting coverage.')
-        chart = alt.Chart(chart_data).mark_bar(color='#2563eb', cornerRadiusEnd=2,
-            size=max(2, min(18, 220 / len(chart_data)))).encode(
-            x=alt.X('Start:T', title=None,
-                axis=alt.Axis(format='%b %d', tickCount=4, labelAngle=0, labelOverlap=True)),
-            y=alt.Y('Amount:Q', title=measure, axis=alt.Axis(format='~s', tickCount=4)),
-            tooltip=[alt.Tooltip('Start:T', title='From', format='%b %d, %Y'),
-                     alt.Tooltip('End:T', title='Through', format='%b %d, %Y'),
-                     alt.Tooltip('Amount:Q', title=measure, format='$,.2f'),
-                     alt.Tooltip('Coverage:N', title='Reports')]
-        ).properties(height=280)
-        st.altair_chart(chart, width='stretch')
+        with st.container(border=True, key='sales_chart_card'):
+            st.subheader('Sales over time')
+            grouping = st.selectbox('Chart detail', ['Auto', 'Daily', 'Weekly', 'Monthly'],
+                key='sales_chart_detail',
+                help='Auto shows days for up to 31 days, weeks for up to 180 days, and months for longer ranges. Totals include only selected dates; missing reports are excluded and edge periods may be partial.')
+            # Null dates remain gaps, never invented zero-sale observations.
+            daily = current.groupby('sale_date')[column].sum() / 100
+            daily = daily.reindex(pd.date_range(start, end, freq='D')).rename(measure)
+            daily.index.name = 'Date'
+            coverage = pd.Series(daily.index.isin(period.sale_date.unique()), index=daily.index)
+            interval, chart_data = chart_periods(daily, coverage, grouping)
+            st.caption(f'{interval} totals · Hover or tap a bar for dates and report coverage.')
+            chart = alt.Chart(chart_data).mark_bar(color='#3ba6f1', cornerRadiusEnd=2,
+                size=max(2, min(18, 220 / len(chart_data)))).encode(
+                x=alt.X('Start:T', title=None,
+                    axis=alt.Axis(format='%b %d', tickCount=4, labelAngle=0, labelOverlap=True)),
+                y=alt.Y('Amount:Q', title=measure, axis=alt.Axis(format='~s', tickCount=4)),
+                tooltip=[alt.Tooltip('Start:T', title='From', format='%b %d, %Y'),
+                         alt.Tooltip('End:T', title='Through', format='%b %d, %Y'),
+                         alt.Tooltip('Amount:Q', title=measure, format='$,.2f'),
+                         alt.Tooltip('Coverage:N', title='Reports')]
+            ).properties(height=280)
+            st.altair_chart(chart, width='stretch')
         left, right = st.columns(2)
-        with left:
+        with left, st.container(border=True, key='department_chart_card'):
             st.subheader('Top departments')
             grouped = (current.groupby('department')[column].sum() / 100).nlargest(10)
             frame = grouped.rename(measure).reset_index()
-            chart = alt.Chart(frame).mark_bar(color='#2563eb', cornerRadiusEnd=3).encode(
+            chart = alt.Chart(frame).mark_bar(color='#3ba6f1', cornerRadiusEnd=3).encode(
                 x=alt.X(f'{measure}:Q', title=measure),
                 y=alt.Y('department:N', sort='-x', title=None, axis=alt.Axis(labelLimit=170)),
                 tooltip=[alt.Tooltip('department:N', title='Department'), alt.Tooltip(f'{measure}:Q', format='$,.2f')])
             st.altair_chart(chart.properties(height=300), use_container_width=True)
-        with right:
+        with right, st.container(border=True, key='product_chart_card'):
             st.subheader('Top products')
             top = current[current.matched_upc.notna()].groupby('matched_upc')[column].sum().nlargest(10).reset_index()
             top = top.merge(products[['upc', 'name']], left_on='matched_upc', right_on='upc')
@@ -103,7 +104,7 @@ def render_overview(sales, products):
                 top['label'] = top['name']
                 duplicates = top['name'].duplicated(keep=False)
                 top.loc[duplicates, 'label'] += ' · ' + top.loc[duplicates, 'upc']
-                chart = alt.Chart(top).mark_bar(color='#2563eb', cornerRadiusEnd=3).encode(
+                chart = alt.Chart(top).mark_bar(color='#3ba6f1', cornerRadiusEnd=3).encode(
                     x=alt.X(f'{measure}:Q', title=measure),
                     y=alt.Y('label:N', sort='-x', title=None, axis=alt.Axis(labelLimit=180)),
                     tooltip=[alt.Tooltip('name:N', title='Product'), alt.Tooltip('upc:N', title='UPC'), alt.Tooltip(f'{measure}:Q', format='$,.2f')])
