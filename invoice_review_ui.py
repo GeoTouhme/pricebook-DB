@@ -39,12 +39,14 @@ def show_saved_receipt(receipt,key="last_saved"):
 
 def render_invoice_review(database=None):
     database=database or DATABASE
-    st.caption('Upload → check invoice lines → review product matches → save invoice')
+    st.caption('Check invoice details, match products, then save.')
     feedback=st.empty()
     receipt=st.session_state.get('last_invoice_save')
     if receipt:
         st.caption('Last successful save')
         show_saved_receipt(receipt)
+    uploaded=st.file_uploader('Upload an invoice PDF or Fintech CSV',type=['pdf','csv'],
+        help='PDF or Fintech CSV, up to 20 MB.')
     with st.expander('Confirmed new items awaiting catalog setup'):
         pending=pending_items(database)
         if pending.empty:st.info('No confirmed new items yet.')
@@ -64,9 +66,8 @@ def render_invoice_review(database=None):
                 original=db.execute('SELECT document FROM invoice_reviews WHERE id=?',(selected_review[0],)).fetchone()[0]
                 st.download_button('Download saved original',original,selected_review[1],key='saved_original')
             else:st.caption('No invoices have been saved through review yet.')
-    uploaded=st.file_uploader('Upload an invoice PDF or Fintech CSV',type=['pdf','csv'])
     if uploaded is None:
-        st.info('Choose a PDF to start. Text-based tables can be extracted locally. Scanned or unfamiliar layouts may need manual entry; a Fintech CSV is also supported.')
+        st.caption('Upload an invoice to begin. Scanned PDFs may need manual entry.')
         return
     payload=uploaded.getvalue()
     digest=hashlib.sha256(payload).hexdigest()
@@ -139,12 +140,21 @@ def render_invoice_review(database=None):
         if field in defaults:header[field]=defaults[field]
     if 'paid' in defaults:
         st.caption(f"Supplier reports paid: ${defaults['paid']} · Amount due: ${defaults.get('amount_due','not supplied')}. Invoice total remains the charged total above.")
-    st.caption('Supplier spelling should match purchase history. Use the invoice date from the document, not the upload date.')
+    st.caption('Use the supplier name and invoice date shown on the document.')
     st.subheader('2. Check the invoice lines')
-    st.caption('Matching uses PACK UPC, normalized to 12 digits by padding or removing only extra leading zeros. CASE UPC is retained for reference. Missing or invalid PACK UPC needs review. Edit extracted values, paste spreadsheet cells, or add rows. Keep UPCs and supplier codes as text. Remove subtotal/footer rows. Quantity and unit cost retain their invoice units; extended_price is the final line amount. Empty adjustments and discount mean zero.')
+    st.caption('Check PACK UPC, quantity, price per invoice unit, and line total.')
+    with st.expander('Invoice units and UPC rules'):
+        st.write('PACK UPC is normalized to 12 digits using leading zeros only. CASE UPC is reference information and is never used as a substitute. Missing or invalid codes need review.')
+        st.write('Keep the units printed on the invoice. Line total is the final charged amount; blank discounts and adjustments mean zero. Remove subtotal and footer rows.')
     edited=st.data_editor(pd.DataFrame(raw_lines,columns=[field for field in LINE_FIELDS if field!='upc']).fillna('').astype(str),
         num_rows='dynamic',hide_index=True,width='stretch',key=f'{token}_source_lines',
-        column_config={field:st.column_config.TextColumn('PACK UPC (as supplied)' if field=='pack_upc' else field.replace('_',' ').title()) for field in LINE_FIELDS if field!='upc'})
+        column_config={field:st.column_config.TextColumn(
+            {'pack_upc':'PACK UPC (as supplied)', 'case_upc':'CASE UPC (reference)',
+             'unit_cost':'Price per invoice unit', 'extended_price':'Line total',
+             'ppc':'Units per pack', 'unit_of_measure':'Invoice unit', 'product_number':'Supplier item'
+            }.get(field,field.replace('_',' ').title()),
+            help='12 digits after normalization; only extra leading zeros are removed.' if field=='pack_upc' else None)
+            for field in LINE_FIELDS if field!='upc'})
     raw_records=edited.fillna('').to_dict('records')
     records=[r for r in raw_records if any(str(v).strip() for v in r.values())]
     for row in records:row['upc']=pack_upc_or_blank(row['pack_upc'])
@@ -165,7 +175,9 @@ def render_invoice_review(database=None):
     cols=st.columns(5)
     for col,status in zip(cols,['Existing item','Previously purchased','Possible match','Potential new item','Unreadable code']):
         col.metric(status,int(result.status.eq(status).sum()))
-    st.caption('The normalized UPC comes only from PACK UPC. CASE UPC is never substituted. Supplier history and name suggestions still require review. Previously purchased means the item was bought before but still needs a catalog link. Purchase history distinguishes previously purchased items from catalog matches. A possible match is a suggestion, not a link. Confirm new items with a retail UPC; case barcodes and supplier codes are preserved separately.')
+    st.caption('Review suggestions before linking products or confirming new items.')
+    with st.expander('What the match statuses mean'):
+        st.write('Existing item: linked to the catalog. Previously purchased: found in purchase history but still needs a catalog link. Possible match: a suggestion to review, not a confirmed link. Confirm new items with a retail UPC.')
     st.dataframe(result[['product_number','upc','pack_upc','case_upc','description','quantity','unit_cost','unit_of_measure','ppc',
         'extended_price','status','purchase_history','reason','suggestions']],hide_index=True,width='stretch',
         column_config={'upc':st.column_config.TextColumn('PACK UPC (12 digits)'),
@@ -181,7 +193,10 @@ def render_invoice_review(database=None):
             'action':st.column_config.SelectboxColumn('Decision',options=ACTIONS,required=True),
             'confirmed_upc':st.column_config.TextColumn('Confirmed retail UPC'),
             'remember_mapping':st.column_config.CheckboxColumn('Remember supplier + pack mapping')})
-    st.caption('Link existing product: enter its exact catalog UPC. Confirm new item: add it to the pending catalog list. Keep unlinked: import without a product link. Remember mapping applies only to existing products with supplier item codes and this same unit/pack. Press Enter or leave the cell to apply an edit; the save checklist updates below.')
+    st.caption('Choose a decision for every line. Press Enter or leave the cell to apply an edit.')
+    with st.expander('Decisions and saved supplier mappings'):
+        st.write('Link existing product uses an exact catalog UPC. Confirm new item adds it to the pending catalog list. Keep unlinked saves the line without a catalog link.')
+        st.write('Remember supplier + pack mapping reuses a confirmed existing-product link only for the same supplier item code, unit and pack size.')
     with st.expander('Search existing catalog UPCs'):
         with closing(sqlite3.connect(database)) as db:
             products=pd.read_sql_query('SELECT p.upc,p.name,p.size,d.name AS department FROM products p JOIN departments d ON d.id=p.department_id',db)

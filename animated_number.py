@@ -1,7 +1,7 @@
 """Install a single reusable browser-side AnimatedNumber for native metrics.
 
 Native metric formatting supplies value, decimals, prefix and suffix; duration
-is 1250ms by default. The parent-document bridge is specific to Streamlit 1.50.
+is 200ms by default. The parent-document bridge is specific to Streamlit 1.50.
 """
 from pathlib import Path
 import streamlit.components.v1 as components

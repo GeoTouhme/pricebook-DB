@@ -26,12 +26,12 @@ test('waits for visibility, eases from zero, then updates from previous value', 
   assert.equal(el.textContent, '0');
   assert.equal(env.pending(), 0);
   counter.visible = true;
-  counter.animate(); env.frame(0); env.frame(625);
+  counter.animate(); env.frame(0); env.frame(100);
   assert.equal(counter.current, 12450 * .875);
-  env.frame(1250); assert.equal(el.textContent, '12,450');
+  env.frame(200); assert.equal(el.textContent, '12,450');
   counter.update({value: 20000}); env.frame(2000);
   assert.equal(counter.current, 12450);
-  env.frame(3250); assert.equal(el.textContent, '20,000');
+  env.frame(2200); assert.equal(el.textContent, '20,000');
 });
 test('formats decimal currencies, percentages, negatives and reduced motion', () => {
   const env = environment(); env.motion.matches = true;

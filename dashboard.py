@@ -46,7 +46,7 @@ with st.sidebar:
                 '<span class="sidebar-brand-name">Bal-Port Liquors'
                 '<small>Store dashboard</small></span></div>', unsafe_allow_html=True)
     pinned = st.session_state.get('sidebar_pinned', False)
-    st.button('Collapse navigation' if pinned else 'Keep navigation expanded',
+    st.button('Unpin sidebar' if pinned else 'Pin sidebar',
               icon=':material/left_panel_close:' if pinned else ':material/left_panel_open:',
               key='sidebar_toggle', on_click=toggle_sidebar, width='stretch',
               help='Pin the menu open or return to the compact icon rail.')
@@ -55,7 +55,6 @@ with st.sidebar:
         label_visibility='collapsed', key='navigation')
     with st.container(key='sidebar_details'):
         st.divider()
-        st.caption('Appearance: ⋮ → Settings → Theme → Light, Dark, or Use system setting.')
         with st.expander('Data summary'):
             st.caption(f'{len(products):,} catalog products · {len(invoices):,} invoices / credits')
             if not sales.empty:
@@ -73,7 +72,17 @@ def money(cents):
 
 
 def table(frame, label, key):
-    st.dataframe(frame,hide_index=True,width='stretch')
+    labels = {'upc':'UPC', 'name':'Product', 'size':'Size', 'department':'Department',
+        'price_qty':'Price quantity', 'cost_qty':'Cost quantity', 'pricebook_stock':'Price-book stock',
+        'website_upc':'Website UPC', 'matched_upc':'Catalog UPC', 'source_upc':'Source UPC',
+        'category':'Category', 'subcategory':'Subcategory', 'status':'Status', 'stock':'Website stock',
+        'product_number':'Supplier item', 'pack_upc':'PACK UPC', 'description':'Product',
+        'quantity':'Quantity', 'unit_of_measure':'Unit', 'unit_cost':'Price per invoice unit',
+        'ppc':'Units per pack', 'extended_price':'Line total', 'adjustments_cents':'Adjustments (cents)',
+        'discount_cents':'Discount (cents)', 'invoice_date':'Invoice date', 'supplier':'Supplier',
+        'invoice_number':'Invoice number', 'due_date':'Due date', 'item_count':'Lines', 'id':'Record ID'}
+    st.dataframe(frame,hide_index=True,width='stretch',
+        column_config={field:st.column_config.Column(label) for field,label in labels.items() if field in frame})
     st.download_button(label,frame.to_csv(index=False).encode('utf-8-sig'),
         file_name=f'{key}.csv',mime='text/csv',key=key)
 
@@ -100,57 +109,11 @@ def search(frame,columns,key):
 
 
 if page == 'Overview':
-    st.caption('Daily POS report · reported amounts, with unmatched and internal entries clearly separated')
-    coverage = sales_coverage(sales)
-    if not coverage.empty and coverage['Missing dates'].sum():
-        st.warning(f"Coverage is incomplete: {int(coverage['Missing dates'].sum())} dates are missing since January 1. See Data quality for monthly gaps. Missing dates are not zero sales.")
-    st.caption('October 15 may be partial. Present dates do not prove complete daily sales.')
-    current=dates(sales,'sale_date','sales_dates')
-    departments=st.multiselect('Sales departments',
-        [*SALES_DEPARTMENT_GROUPS, *sorted(sales.department.unique())])
-    current=filter_sales_departments(current,departments)
-    for selection in departments:
-        if selection in SALES_DEPARTMENT_GROUPS:
-            st.caption(selection + ' combines: ' + ', '.join(sorted(SALES_DEPARTMENT_GROUPS[selection]))
-                + '. Original department names remain visible in charts and exports.')
-    scope=st.radio('Include',['All report rows','Matched products only','Unmatched / internal rows'],horizontal=True)
-    if scope=='Matched products only':
-        current=current[current.matched_upc.notna()]
-    elif scope=='Unmatched / internal rows':
-        current=current[current.matched_upc.isna()]
-    cols=st.columns(4)
-    cols[0].metric('Reported Sales $',money(current.sales_cents.sum()))
-    cols[1].metric('Reported Scan Sales',money(current.scan_sales_cents.sum()))
-    cols[2].metric('Report rows',f'{len(current):,}')
-    cols[3].metric('Rows linked to products',f'{current.matched_upc.notna().mean():.1%}' if len(current) else '—')
-    st.caption('Sales $ and Scan Sales are distinct source fields. These totals are not confirmed net merchandise revenue. All rows can include fees, lottery, tax, and cash back; currency is not explicitly supplied by the reports.')
-    if current.empty:
-        st.info('No sales rows match these filters.')
-    else:
-        daily=current.groupby('sale_date')[['sales_cents','scan_sales_cents']].sum()/100
-        daily=daily.rename(columns={'sales_cents':'Sales $','scan_sales_cents':'Scan Sales'})
-        st.subheader('Daily reported sales')
-        # Reindex with nulls: gaps are absent observations, not zero amounts.
-        daily=daily.reindex(pd.date_range(current.sale_date.min(),current.sale_date.max()))
-        daily.index.name='Date'
-        st.bar_chart(daily,y_label='Reported amount ($)')
-        left,right=st.columns(2)
-        with left:
-            st.subheader('Sales by department · top 15')
-            grouped=(current.groupby('department').sales_cents.sum()/100).sort_values(ascending=False).head(15)
-            st.bar_chart(grouped,horizontal=True,x_label='Reported Sales $')
-        with right:
-            st.subheader('Top products · exact matches')
-            top=current[current.matched_upc.notna()].groupby('matched_upc').sales_cents.sum().nlargest(15).reset_index()
-            top=top.merge(products[['upc','name']],left_on='matched_upc',right_on='upc')
-            top['Sales $']=top.sales_cents/100
-            st.dataframe(top[['upc','name','Sales $']],hide_index=True,width='stretch')
-        export=current.drop(columns=['import_id']).rename(columns={'sales_cents':'Sales cents','scan_sales_cents':'Scan Sales cents'})
-        with st.expander('View and export filtered sales'):
-            table(export,'Download filtered sales','filtered_sales')
+    from overview_ui import render_overview
+    render_overview(sales, products)
 
 elif page == 'Products':
-    st.caption('Price book catalog · UPCs remain text, including leading zeros')
+    st.caption('Catalog prices and purchase history')
     current=search(products,['upc','name'],'product_search')
     department=st.selectbox('Catalog department',['All departments',*sorted(products.department.unique())])
     if department!='All departments':
@@ -164,14 +127,14 @@ elif page == 'Products':
     display['Source cost $']=display.cost_cents/100
     table(display[['upc','name','size','department','Price $','price_qty','Source cost $','cost_qty','pricebook_stock']],
           'Download catalog','catalog')
-    st.caption('Price is for price_qty units; source cost is for cost_qty units. Zero costs are not evidence of free goods. No profit estimate is inferred.')
+    st.caption('Prices and costs apply to the quantities shown. A zero source cost means cost needs review.')
     if not current.empty:
         product_names=products.set_index('upc')['name'].to_dict()
         chosen=st.selectbox('Product history',current.upc.tolist(),format_func=lambda u: f'{u} · {product_names[u]}')
         history=sales[sales.matched_upc==chosen]
         st.subheader('Daily product sales · exact UPC matches')
         if history.empty:
-            st.info('No linked sales rows for this product. This does not establish zero sales.')
+            st.info('No sales linked to this UPC. Unmatched sales may be excluded.')
         else:
             daily=history.groupby('sale_date').sales_cents.sum()/100
             st.bar_chart(daily.rename('Reported Sales $'))
@@ -181,8 +144,8 @@ elif page == 'Products':
             st.dataframe(purchase_history[['invoice_date','supplier','invoice_number','quantity','unit_of_measure','unit_cost','ppc','extended_price']],hide_index=True)
 
 elif page == 'Inventory':
-    st.caption('Website snapshots beside source price-book stock · no inferred physical inventory')
-    st.warning('Website stock is mostly 100 and may represent defaults. Purchase quantities are not confirmed receipts. These sources do not establish current physical stock.')
+    st.caption('Website stock and price-book stock')
+    st.warning('Reported stock is not a verified physical count.')
     snapshot=st.selectbox('Website snapshot date',sorted(inventory.snapshot_date.unique(),reverse=True))
     current=inventory[inventory.snapshot_date==snapshot].copy()
     current=search(current,['website_upc','name'],'inventory_search')
@@ -192,14 +155,15 @@ elif page == 'Inventory':
     cols=st.columns(3)
     cols[0].metric('Website items',f'{len(current):,}')
     cols[1].metric('Unmatched items',f'{current.matched_upc.isna().sum():,}')
-    cols[2].metric('Stock reported as 100',f'{current.stock.eq("100").sum():,}')
+    cols[2].metric('Stock reported as 100',f'{current.stock.eq("100").sum():,}',
+        help='Repeated stock values may be website defaults. Check physical stock before using them to reorder.')
     view=current.merge(products[['upc','pricebook_stock']],left_on='matched_upc',right_on='upc',how='left')
     view=view[['website_upc','name','category','subcategory','status','stock','pricebook_stock','matched_upc']]
     table(view,'Download inventory comparison','inventory_comparison')
-    st.caption('Website date comes from the export filename. The price book has no confirmed stock observation date. Stock values are displayed as supplied, including negatives.')
+    st.caption('Snapshot date is recorded at import. Price-book stock has no confirmed count date.')
 
 elif page == 'Purchases':
-    st.caption('Fintech invoices and credits · invoice headers counted once')
+    st.caption('Supplier invoices and credits')
     current=dates(invoices,'invoice_date','purchase_dates')
     suppliers=st.multiselect('Suppliers',sorted(invoices.supplier.unique()))
     if suppliers:
@@ -209,7 +173,7 @@ elif page == 'Purchases':
     cols[1].metric('Invoices / credits',f'{len(current):,}')
     cols[2].metric('Negative-total documents',f'{(current.total_cents<0).sum():,}')
     cols[3].metric('Suppliers',current.supplier.nunique())
-    st.caption('These are invoice amounts, not confirmed payments. Invoice dates cover January–September; completeness is not established. Costs and pack sizes require mapping before margins can be calculated.')
+    st.caption('Invoice amounts include credits; they are not confirmed payments.')
     if current.empty:
         st.info('No invoices match these filters.')
     else:
@@ -227,7 +191,7 @@ elif page == 'Purchases':
             f'{current.loc[current.id==i,"invoice_date"].iloc[0].date()} · {current.loc[current.id==i,"supplier"].iloc[0]} · {current.loc[current.id==i,"invoice_number"].iloc[0]}')
         detail=lines[lines.invoice_id==chosen][['product_number','source_upc','pack_upc','matched_upc','description','quantity','unit_of_measure','unit_cost','ppc','adjustments_cents','discount_cents','extended_price']]
         table(detail,'Download invoice lines','invoice_lines')
-        st.caption('Unit costs and extended prices retain sub-cent precision. PPC is shown as supplied; no case-to-unit conversion is assumed. Discounts and adjustments are already separate source fields and are not added again.')
+        st.caption('Prices and quantities retain invoice units and precision. Line totals already include source discounts and adjustments.')
         flagged=reconcile(current,lines)
         with st.expander(f'Reconciliation flags ({len(flagged)})'):
             if flagged.empty:
@@ -251,7 +215,7 @@ else:
     cols[2].metric('Unmatched website items',f'{inventory.matched_upc.isna().sum():,}')
     st.subheader('Sales date coverage')
     st.dataframe(sales_coverage(sales),hide_index=True,width='stretch')
-    st.caption('Coverage is checked from January 1 through the latest imported sales date. October 15 may be partial. Present dates do not prove every transaction was exported.')
+    st.caption('Coverage starts January 1 and ends on the latest report date. The latest date may be partial; reported dates do not prove a complete day.')
     st.subheader('Unmatched sales')
     st.info('September–October includes rounded UPCs. Exact matching avoids speculative links. Blank codes and internal items are retained. Product-name matches require review.')
     unresolved=sales[sales.matched_upc.isna()].groupby(['source_upc','department','item'],dropna=False).agg(

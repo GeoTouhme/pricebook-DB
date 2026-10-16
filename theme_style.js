@@ -23,7 +23,7 @@
       '--dashboard-brand': dark ? '#dbeafe' : '#172554',
       '--dashboard-muted': dark ? '#a8b8cf' : '#64748b',
       '--dashboard-accent': dark ? '#93c5fd' : '#2563eb',
-      '--dashboard-icon-filter': dark ? 'brightness(0) saturate(100%) invert(84%) sepia(15%) saturate(465%) hue-rotate(94deg)' : 'none',
+      '--dashboard-icon-filter': dark ? 'brightness(0) invert(1)' : 'none',
     };
     for (const [name, value] of Object.entries(values)) {
       if (doc.documentElement.style.getPropertyValue(name) !== value) {

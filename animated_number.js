@@ -7,7 +7,7 @@
   const states = new Map();
   const bindings = new WeakMap();
   class AnimatedNumber {
-    constructor(element, {value, duration = 1250, decimals = 0, prefix = '', suffix = ''}) {
+    constructor(element, {value, duration = 200, decimals = 0, prefix = '', suffix = ''}) {
       this.element = element;
       this.current = 0;
       this.started = false;
@@ -25,9 +25,9 @@
       this.rendered = this.format(value);
       if (this.element.textContent !== this.rendered) this.element.textContent = this.rendered;
     }
-    update({value, duration = 1250, decimals = 0, prefix = '', suffix = ''}) {
+    update({value, duration = 200, decimals = 0, prefix = '', suffix = ''}) {
       host.cancelAnimationFrame(this.frame);
-      Object.assign(this, {value, duration: Math.max(1000, Math.min(1500, duration)), decimals, prefix, suffix});
+      Object.assign(this, {value, duration: Math.max(0, Math.min(300, duration)), decimals, prefix, suffix});
       this.element.style.fontVariantNumeric = 'tabular-nums';
       this.element.setAttribute('aria-label', this.format(value));
       if (motion.matches) { this.started = true; this.paint(value); }

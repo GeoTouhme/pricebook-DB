@@ -55,10 +55,11 @@ def sidebar_css(pinned=False):
 .sidebar-brand-name {font-weight:650;color:var(--dashboard-brand, #172554);font-size:16px;}
 .sidebar-brand-name small {display:block;color:var(--dashboard-muted, #64748b);font-weight:400;font-size:12px;margin-top:3px;}
 .st-key-sidebar_toggle button {height:48px;white-space:nowrap;border-color:var(--dashboard-border, #e2e8f0);background:transparent;border-radius:12px;}
+.st-key-sidebar_toggle button:focus:not(:active) {box-shadow:0 0 0 2px var(--dashboard-accent, #2563eb);}
 @media (min-width: 769px) {
     [data-testid="stSidebar"][aria-expanded="true"] {
         width:84px !important;min-width:84px !important;max-width:280px !important;
-        transition:width .25s cubic-bezier(.2,.8,.2,1),min-width .25s cubic-bezier(.2,.8,.2,1);
+        transition:width .18s ease-out,min-width .18s ease-out;
     }
     [data-testid="stSidebarUserContent"] {padding:1.1rem 16px;overflow-x:hidden;}
     [data-testid="stSidebar"] [role="radiogroup"] > label {width:52px;}
@@ -66,6 +67,7 @@ def sidebar_css(pinned=False):
     .sidebar-brand-name, .st-key-sidebar_details,
     .st-key-sidebar_toggle button p {white-space:nowrap;opacity:0;max-width:0;overflow:hidden;transition:opacity .15s ease;}
     .st-key-sidebar_details {display:none;}
+    .st-key-sidebar_details p {white-space:normal !important;overflow-wrap:anywhere;}
     EXPANDED[aria-expanded="true"] {width:280px !important;min-width:280px !important;}
     EXPANDED [role="radiogroup"] > label {width:100%;}
     EXPANDED [role="radiogroup"] p,

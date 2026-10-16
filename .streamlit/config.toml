@@ -1,5 +1,5 @@
 [theme]
-primaryColor = "#167e85"
+primaryColor = "#2563eb"
 backgroundColor = "#ffffff"
 secondaryBackgroundColor = "#f1f5f9"
 textColor = "#172554"
@@ -8,3 +8,4 @@ font = "sans serif"
 gatherUsageStats = false
 [server]
 headless = true
+maxUploadSize = 20

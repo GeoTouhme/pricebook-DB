@@ -21,9 +21,9 @@
       show(element);
       if (motion.matches || !element.animate) continue;
       const animation = element.animate([
-        {opacity: 0, transform: 'translateY(12px)'},
+        {opacity: 0, transform: 'translateY(4px)'},
         {opacity: 1, transform: 'translateY(0)'}
-      ], {duration: 1100, easing: 'cubic-bezier(0.215, 0.61, 0.355, 1)'});
+      ], {duration: 180, easing: 'ease-out'});
       active.set(element, animation);
       const cleanup = () => active.delete(element);
       animation.onfinish = cleanup;
