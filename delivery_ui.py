@@ -7,7 +7,7 @@ import csv
 import altair as alt
 import pandas as pd
 import streamlit as st
-from delivery_reports import parse_upload, preview_uploads, save_uploads, load_reports, total
+from delivery_reports import validate_batch, parse_batch, preview_uploads, save_uploads, load_reports, total
 from delivery_metrics import summarize, common_period, quality_details
 
 COLORS=alt.Scale(domain=['DoorDash','Uber Eats'],range=['#2563eb','#93c5fd'])
@@ -57,7 +57,8 @@ def upload_panel(database):
         files=st.file_uploader('Select reports',type=['zip','csv','xlsx'],accept_multiple_files=True,key='delivery_uploads')
         if not files: return
         try:
-            uploads=[parse_upload(f.getvalue(),f.name) for f in files]
+            validate_batch([f.size for f in files])
+            uploads=parse_batch([(f.getvalue(),f.name) for f in files])
             preview=preview_uploads(uploads,database)
         except (ValueError,UnicodeError,KeyError) as exc:
             st.error(f'Could not read reports: {exc}'); return

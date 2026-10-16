@@ -18,9 +18,9 @@ narwhals==2.27.1
 numpy==2.5.4
 packaging==25.0
 pandas==2.3.3
-pdfminer.six==20250506
-pdfplumber==0.11.7
-pillow==11.3.0
+pdfminer.six==20260107
+pdfplumber==0.11.10
+pillow==12.3.0
 protobuf==6.33.6
 pyarrow==26.0.0
 pycparser==3.11
@@ -33,7 +33,7 @@ requests==2.34.2
 rpds-py==2026.9.1
 six==1.17.0
 smmap==5.0.3
-streamlit==1.50.0
+streamlit==1.54.0
 tenacity==9.2.1
 toml==0.10.2
 tornado==6.5.10

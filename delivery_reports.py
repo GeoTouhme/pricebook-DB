@@ -16,7 +16,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path, PurePosixPath
 from xml.etree import ElementTree as ET
 
-MAX_BYTES = 30 * 1024 * 1024
+MAX_BYTES = 20 * 1024 * 1024
 MAX_EXPANDED = 100 * 1024 * 1024
 SCHEMA = '''
 CREATE TABLE IF NOT EXISTS delivery_sources (
@@ -190,9 +190,34 @@ def coverage(filename, rows):
     return (min(starts),max(ends)) if starts and ends else (None,None)
 
 
+def validate_batch(sizes):
+    if len(sizes) > 20 or sum(sizes) > 50*1024*1024:
+        raise ValueError('Upload at most 20 files and 50 MB total per batch.')
+    if any(size > MAX_BYTES for size in sizes):
+        raise ValueError('Each report must be at most 20 MB.')
+
+
+def parse_batch(files):
+    """Check whole-batch expansion before allocating parsed reports."""
+    validate_batch([len(payload) for payload, name in files])
+    expanded = 0
+    for payload, name in files:
+        if Path(name).suffix.lower() in ('.zip', '.xlsx'):
+            try:
+                with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+                    expanded += sum(e.file_size for e in archive.infolist())
+            except zipfile.BadZipFile as exc:
+                raise ValueError('Malformed archive.') from exc
+        else:
+            expanded += len(payload)
+    if expanded > MAX_EXPANDED:
+        raise ValueError('Reports expand beyond the 100 MB batch limit. Upload fewer files.')
+    return [parse_upload(payload, name) for payload, name in files]
+
+
 def parse_upload(payload, filename):
     if not payload or len(payload)>MAX_BYTES:
-        raise ValueError('Choose a nonempty report up to 30 MB.')
+        raise ValueError('Choose a nonempty report up to 20 MB.')
     suffix=Path(filename).suffix.lower()
     members=archive_members(payload) if suffix=='.zip' else [(filename,payload)]
     reports=[]
@@ -354,6 +379,7 @@ def assess(db, uploads):
 
 
 def preview_uploads(uploads,database):
+    validate_batch([len(u["payload"]) for u in uploads])
     with closing(connect_read(database)) as db:
         result=assess(db,uploads)
         merged={}
@@ -371,6 +397,7 @@ def preview_uploads(uploads,database):
 
 
 def save_uploads(uploads,database):
+    validate_batch([len(u["payload"]) for u in uploads])
     from data_imports import copy_database
     from uuid import uuid4
     with closing(sqlite3.connect(database)) as db:
@@ -397,6 +424,8 @@ def save_uploads(uploads,database):
             db.commit()
         except Exception:
             db.rollback(); raise
+    from backup_policy import prune_backups
+    prune_backups(database)
     return dict(result,backup=str(backup))
 
 

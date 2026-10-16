@@ -67,4 +67,6 @@ def save_import(payload, filename, kind, database, snapshot_date=None):
     backup = folder / f'before-upload-{datetime.now(timezone.utc):%Y%m%d-%H%M%S}-{uuid4().hex[:8]}.sqlite3'
     copy_database(database, backup)
     result = run_import(payload, filename, kind, database, snapshot_date)
+    from backup_policy import prune_backups
+    prune_backups(database)
     return dict(result, backup=str(backup))

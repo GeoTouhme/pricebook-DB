@@ -1,3 +1,4 @@
+from auth_helpers import logged_in_app
 import csv
 import io
 import json
@@ -189,7 +190,7 @@ class InvoiceReviewTests(unittest.TestCase):
             def getvalue(self):return payload
         def button(app,label):return next(b for b in app.button if b.label==label)
         with patch.object(invoice_review_ui,'DATABASE',self.db),patch('streamlit.file_uploader',return_value=Uploaded()):
-            app=AppTest.from_file(str(ROOT/'dashboard.py'),default_timeout=30).run()
+            app=logged_in_app(str(ROOT/'dashboard.py'),default_timeout=30)
             app.sidebar.radio[0].set_value('New Items Review').run()
             self.assertEqual(len(app.exception),0)
             button(app,'Check for new items').click().run()
@@ -273,7 +274,7 @@ class InvoiceReviewTests(unittest.TestCase):
             name='invoice.pdf'
             def getvalue(self):return pdf.read_bytes()
         with patch.object(invoice_review_ui,'DATABASE',self.db),patch('streamlit.file_uploader',return_value=Uploaded()):
-            app=AppTest.from_file(str(ROOT/'dashboard.py'),default_timeout=30).run()
+            app=logged_in_app(str(ROOT/'dashboard.py'),default_timeout=30)
             app.session_state['review_document']=hashlib.sha256(pdf.read_bytes()).hexdigest()
             app.session_state['review_extracted']={'kind':'pdf','lines':[],'text':'old result','warnings':[]}
             app.sidebar.radio[0].set_value('New Items Review').run()
@@ -373,7 +374,7 @@ class InvoiceReviewTests(unittest.TestCase):
             name='invoice-report.pdf'
             def getvalue(self):return pdf.read_bytes()
         with patch.object(invoice_review_ui,'DATABASE',self.db),patch('streamlit.file_uploader',return_value=Uploaded()):
-            app=AppTest.from_file(str(ROOT/'dashboard.py'),default_timeout=30).run()
+            app=logged_in_app(str(ROOT/'dashboard.py'),default_timeout=30)
             app.session_state['review_document']=hashlib.sha256(pdf.read_bytes()).hexdigest()+':3'
             app.session_state['review_extracted']={'kind':'pdf','lines':[{**blank_line(),'pack_upc':'0007089701'}],
                 'text':'old truncated result','warnings':[]}
@@ -409,7 +410,7 @@ class InvoiceReviewTests(unittest.TestCase):
             name='invoice.pdf'
             def getvalue(self):return pdf.read_bytes()
         with patch.object(invoice_review_ui,'DATABASE',self.db),patch('streamlit.file_uploader',return_value=Uploaded()),patch.object(invoice_review_ui,'save_review') as save:
-            app=AppTest.from_file(str(ROOT/'dashboard.py'),default_timeout=30).run()
+            app=logged_in_app(str(ROOT/'dashboard.py'),default_timeout=30)
             app.sidebar.radio[0].set_value('New Items Review').run()
             next(b for b in app.button if b.label=='Check for new items').click().run()
             next(c for c in app.checkbox if c.label.startswith('I checked')).check().run()
@@ -438,7 +439,7 @@ class InvoiceReviewTests(unittest.TestCase):
             name='error.csv'
             def getvalue(self):return payload
         with patch.object(invoice_review_ui,'DATABASE',self.db),patch('streamlit.file_uploader',return_value=Uploaded()),patch.object(invoice_review_ui,'save_review',side_effect=sqlite3.OperationalError('database is locked')):
-            app=AppTest.from_file(str(ROOT/'dashboard.py'),default_timeout=30).run()
+            app=logged_in_app(str(ROOT/'dashboard.py'),default_timeout=30)
             app.sidebar.radio[0].set_value('New Items Review').run()
             next(b for b in app.button if b.label=='Check for new items').click().run()
             next(c for c in app.checkbox if c.label.startswith('I checked')).check().run()
@@ -505,7 +506,7 @@ class InvoiceReviewTests(unittest.TestCase):
             name='mercaso.pdf'
             def getvalue(self):return pdf.read_bytes()
         with patch.object(invoice_review_ui,'DATABASE',self.db),patch('streamlit.file_uploader',return_value=Uploaded()):
-            app=AppTest.from_file(str(ROOT/'dashboard.py'),default_timeout=30).run()
+            app=logged_in_app(str(ROOT/'dashboard.py'),default_timeout=30)
             app.sidebar.radio[0].set_value('New Items Review').run()
             self.assertEqual(len(app.exception),0)
             values={item.label:item.value for item in app.text_input}

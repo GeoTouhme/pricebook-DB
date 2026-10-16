@@ -1,3 +1,4 @@
+from safe_exports import csv_bytes
 """Sales overview focused on the selected reporting period."""
 import altair as alt
 import pandas as pd
@@ -94,5 +95,5 @@ def render_overview(sales, products):
         b.metric('Rows linked to products', f'{current.matched_upc.notna().mean():.1%}' if len(current) else '—')
         export = current.drop(columns=['import_id']).rename(columns={'sales_cents': 'Sales cents', 'scan_sales_cents': 'Scan Sales cents'})
         st.dataframe(export, hide_index=True, width='stretch')
-        st.download_button('Download filtered sales', export.to_csv(index=False).encode('utf-8-sig'),
+        st.download_button('Download filtered sales', csv_bytes(export),
             file_name='filtered_sales.csv', mime='text/csv', key='filtered_sales')

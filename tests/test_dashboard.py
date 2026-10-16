@@ -1,3 +1,4 @@
+from auth_helpers import logged_in_app
 from datetime import date
 from pathlib import Path
 import unittest
@@ -14,7 +15,7 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(len(reconcile(data['invoices'],data['purchase_lines'])),10)
 
     def test_pages_and_filters(self):
-        app=AppTest.from_file(str(ROOT/'dashboard.py'),default_timeout=30).run()
+        app=logged_in_app(str(ROOT/'dashboard.py'),default_timeout=30)
         self.assertEqual(len(app.exception),0)
         self.assertEqual(app.date_input[0].value,(date(2026,10,1),date(2026,10,15)))
         app.date_input[0].set_value((date(2026,5,1),date(2026,10,15))).run()
@@ -52,7 +53,7 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(len(app.exception),0)
 
     def test_all_beer_group_across_department_change(self):
-        app=AppTest.from_file(str(ROOT/'dashboard.py'),default_timeout=30).run()
+        app=logged_in_app(str(ROOT/'dashboard.py'),default_timeout=30)
         app.multiselect[0].set_value(['All Beer']).run()
         for day,total in [(date(2026,6,12),'$1,582.79'),(date(2026,6,13),'$2,097.16')]:
             app.date_input[0].set_value((day,day)).run()
@@ -85,7 +86,7 @@ class DashboardTests(unittest.TestCase):
         self.assertIn('Champagne',SALES_DEPARTMENT_GROUPS['All Wine'])
 
     def test_wine_filter_and_multiple_groups(self):
-        app=AppTest.from_file(str(ROOT/'dashboard.py'),default_timeout=30).run()
+        app=logged_in_app(str(ROOT/'dashboard.py'),default_timeout=30)
         app.multiselect[0].set_value(['All Wine']).run()
         day=date(2026,6,12)
         app.date_input[0].set_value((day,day)).run()

@@ -1,3 +1,4 @@
+from safe_exports import csv_bytes
 """Streamlit invoice review page; parsing never writes purchases."""
 import base64
 from collections import defaultdict
@@ -52,7 +53,7 @@ def render_invoice_review(database=None):
         if pending.empty:st.info('No confirmed new items yet.')
         else:
             st.dataframe(pending,hide_index=True,width='stretch')
-            st.download_button('Download new-item list',pending.to_csv(index=False).encode('utf-8-sig'),
+            st.download_button('Download new-item list',csv_bytes(pending),
                 'new_items.csv','text/csv')
         st.caption('Confirmed new items stay on this list until retail pricing and catalog setup are completed. Saving an invoice does not mark goods received.')
     with st.expander('Previously reviewed invoices and original documents'):
@@ -183,7 +184,7 @@ def render_invoice_review(database=None):
         column_config={'upc':st.column_config.TextColumn('PACK UPC (12 digits)'),
             'pack_upc':st.column_config.TextColumn('Original PACK UPC'),
             'case_upc':st.column_config.TextColumn('CASE UPC (reference)')})
-    st.download_button('Download match report',result.to_csv(index=False).encode('utf-8-sig'),
+    st.download_button('Download match report',csv_bytes(result),
         'invoice_match_review.csv','text/csv')
     decision_frame=result[['description','status','action','confirmed_upc','remember_mapping']].copy()
     decision_frame.insert(0,'Line',range(1,len(decision_frame)+1))

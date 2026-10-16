@@ -1,7 +1,7 @@
 # Price book database
 
 SQLite database built from the supplied price book: 9,775 products, 91 departments.
-Requires Python 3; no external packages, credentials, or database server.
+The CSV import scripts use Python 3 and SQLite. The dashboard requires the pinned dependencies and two local admin accounts; see [secure Ubuntu setup](SECURITY.md).
 
 ## Build and validate
 

@@ -45,6 +45,40 @@ def blank_line():
 
 
 def extract_document(payload, filename):
+    if len(payload) > 20*1024*1024:
+        raise ValueError('Upload a document smaller than 20 MB')
+    if not filename.lower().endswith('.pdf'):
+        return _extract_document(payload, filename)
+    if not payload.startswith(b'%PDF-'):
+        raise ValueError('Choose a PDF or a Fintech CSV export')
+    import subprocess
+    import sys
+    import os
+    from pathlib import Path
+    # Limit concurrency across sessions in this server process.
+    if not _PDF_SLOTS.acquire(blocking=False):
+        raise ValueError('Another PDF is being processed. Try again shortly.')
+    try:
+        env = dict(os.environ, OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1')
+        completed = subprocess.run([sys.executable, str(Path(__file__).with_name('pdf_worker.py'))],
+            input=payload, capture_output=True, timeout=60, env=env)
+        if completed.returncode:
+            raise ValueError('PDF exceeded processing limits or could not be read. Try a smaller PDF.')
+        result = json.loads(completed.stdout)
+        if 'error' in result:
+            raise ValueError(result['error'])
+        return result['result']
+    except subprocess.TimeoutExpired as exc:
+        raise ValueError('PDF processing exceeded 60 seconds. Split the document and try again.') from exc
+    finally:
+        _PDF_SLOTS.release()
+
+
+import threading
+_PDF_SLOTS = threading.BoundedSemaphore(1)
+
+
+def _extract_document(payload, filename):
     """PDF tables require identifiable headers; unknown layouts never become invented lines."""
     if len(payload)>20*1024*1024:
         raise ValueError('Upload a document smaller than 20 MB')

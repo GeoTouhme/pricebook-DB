@@ -1,3 +1,4 @@
+from safe_exports import csv_bytes
 """Pricebook dashboard. Run with streamlit run dashboard.py."""
 from datetime import date
 from pathlib import Path
@@ -13,6 +14,9 @@ from dashboard_data import (DATABASE, load_data, reconcile, sales_coverage,
 LOGO = Path(__file__).resolve().parent / 'logojpg.jpg'
 st.set_page_config(page_title='Bal-Port Liquors · Store dashboard',
                    page_icon=str(LOGO) if LOGO.is_file() else 'B', layout='wide')
+from auth import require_login
+require_login()
+
 st.markdown('''<style>
 .block-container {padding-top:2rem;max-width:1500px;}
 [data-testid="stMetric"] {background:var(--dashboard-card, #f1f5f9);border-radius:12px;padding:16px;}
@@ -83,7 +87,7 @@ def table(frame, label, key):
         'invoice_number':'Invoice number', 'due_date':'Due date', 'item_count':'Lines', 'id':'Record ID'}
     st.dataframe(frame,hide_index=True,width='stretch',
         column_config={field:st.column_config.Column(label) for field,label in labels.items() if field in frame})
-    st.download_button(label,frame.to_csv(index=False).encode('utf-8-sig'),
+    st.download_button(label,csv_bytes(frame),
         file_name=f'{key}.csv',mime='text/csv',key=key)
 
 
