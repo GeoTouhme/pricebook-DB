@@ -1,0 +1,9 @@
+{
+  "source": "itemsales_aug12_original.csv",
+  "source_sha256": "5535afd9818e59492786b579b7ccfd92e9dad7cd00be1c607718720d52012649",
+  "derived": "itemsales_aug12.csv",
+  "selected_date": "2026-08-12",
+  "rows": 668,
+  "excluded_rows": 28,
+  "reason": "Replace incomplete August 12; exclude overlapping August 13."
+}

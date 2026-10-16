@@ -16,10 +16,13 @@ class DashboardTests(unittest.TestCase):
     def test_pages_and_filters(self):
         app=AppTest.from_file(str(ROOT/'dashboard.py'),default_timeout=30).run()
         self.assertEqual(len(app.exception),0)
-        self.assertEqual(app.metric[0].value,'$1,949,214.79')
+        self.assertEqual(app.metric[0].value,'$1,959,533.66')
+        app.date_input[0].set_value((date(2026,8,12),date(2026,8,12))).run()
+        self.assertEqual(app.metric[0].value,'$10,460.68')
+        self.assertEqual(app.metric[2].value,'668')
         app.main.radio[0].set_value('Matched products only').run()
         self.assertEqual(len(app.exception),0)
-        self.assertNotEqual(app.metric[0].value,'$1,949,214.79')
+        self.assertNotEqual(app.metric[0].value,'$1,959,533.66')
         app.date_input[0].set_value((date(2026,8,13),date(2026,8,31))).run()
         self.assertEqual(app.metric[2].value,'14,298')
         app.main.radio[0].set_value('All report rows').run()
@@ -40,7 +43,7 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(app.metric[3].value,'1')
         self.assertEqual(len(app.exception),0)
         app.sidebar.radio[0].set_value('Data quality').run()
-        self.assertEqual(app.metric[0].value,'16,823')
+        self.assertEqual(app.metric[0].value,'16,834')
         self.assertEqual(len(app.exception),0)
 
     def test_all_beer_group_across_department_change(self):

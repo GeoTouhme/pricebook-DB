@@ -493,3 +493,24 @@ After pulling on an existing installation, import the gap with:
 
 Restart Streamlit (or click Refresh data). Repeating this command is safe and
 will report `already_imported`. The cloud setup script also imports this file.
+
+### August 12 correction
+
+The subsequently supplied one-day export confirms **668 August 12 rows**,
+**$10,460.68 Sales $**, and **$8,123.51 Scan Sales**. It replaces the 21 partial
+rows ($141.81) previously retained for August 12; it does not add to them.
+August 13 rows at the end of the supplied export are excluded. The original file
+is `data/itemsales_aug12_original.csv`; the filtered import and provenance are
+`data/itemsales_aug12.csv` and `data/itemsales_aug12_provenance.json`.
+
+On Windows after `git pull`, run:
+
+```powershell
+.\.venv\Scripts\python.exe import_daily_sales.py data/itemsales_aug12.csv --replace-date 2026-08-12
+```
+
+Restart Streamlit or refresh data. This command is safe to repeat. Date replacement
+requires a file containing only the explicitly selected date and runs atomically.
+Every replaced row, including original source import IDs and raw source JSON, is
+preserved in `sales_date_replacements`. Other dates remain unchanged. Cloud setup
+runs the same correction. The previous August 12 partial-data warning is superseded.

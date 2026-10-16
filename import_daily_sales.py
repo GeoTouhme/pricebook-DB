@@ -34,7 +34,7 @@ def number(value):
     return value
 
 
-def import_sales(source, database, replace_sha256=None):
+def import_sales(source, database, replace_sha256=None, replace_date=None):
     source = Path(source)
     payload = source.read_bytes()
     digest = hashlib.sha256(payload).hexdigest()
@@ -48,6 +48,9 @@ def import_sales(source, database, replace_sha256=None):
         raise ValueError('No sales rows')
     with sqlite3.connect(database) as db:
         db.executescript((ROOT / 'schema.sql').read_text())
+        db.execute('BEGIN IMMEDIATE')
+        if replace_sha256 and replace_date:
+            raise ValueError('Choose either UPC correction or date replacement, not both')
         previous = db.execute('SELECT id FROM imports WHERE sha256=?', (digest,)).fetchone()
         if previous:
             if not db.execute('SELECT 1 FROM daily_sales_rows WHERE import_id=? LIMIT 1', previous).fetchone():
@@ -68,12 +71,24 @@ def import_sales(source, database, replace_sha256=None):
         # Overlapping reports may repeat daily summaries with changed values.
         # Reject instead of silently adding them together; replacements need explicit review.
         incoming_dates = {parse_date(r['Date']) for r in rows}
+        previous_rows = []
+        if replace_date:
+            replace_date = parse_date(replace_date)
+            if incoming_dates != {replace_date}:
+                raise ValueError('Date replacement requires a file containing only the selected date')
+            cursor = db.execute('SELECT * FROM daily_sales_rows WHERE sale_date=?', (replace_date,))
+            columns = [c[0] for c in cursor.description]
+            previous_rows = [dict(zip(columns, row)) for row in cursor]
+            db.execute('DELETE FROM daily_sales_rows WHERE sale_date=?', (replace_date,))
         existing_dates = {r[0] for r in db.execute('SELECT DISTINCT sale_date FROM daily_sales_rows')}
         overlap = incoming_dates & existing_dates
         if overlap:
             raise ValueError(f'Report overlaps {len(overlap)} previously imported dates; review before importing')
         batch = db.execute('INSERT INTO imports(source_name,sha256,row_count) VALUES (?,?,?)',
                            (source.name, digest, len(rows))).lastrowid
+        if previous_rows:
+            db.execute('INSERT INTO sales_date_replacements(sale_date,replacement_import_id,previous_rows_json) VALUES (?,?,?)',
+                       (replace_date, batch, json.dumps(previous_rows, ensure_ascii=False)))
         products = {r[0] for r in db.execute('SELECT upc FROM products')}
         matched = 0
         for line, row in enumerate(rows, 2):
@@ -96,5 +111,6 @@ if __name__ == '__main__':
     parser.add_argument('source', type=Path)
     parser.add_argument('--database', default=ROOT / 'data/pricebook.sqlite3')
     parser.add_argument('--replace-sha256', help='Explicit checksum of an import to replace; only UPC corrections allowed')
+    parser.add_argument('--replace-date', help='Explicitly replace this date only (YYYY-MM-DD); original rows retained in audit')
     args = parser.parse_args()
-    print(json.dumps(import_sales(args.source, args.database, args.replace_sha256)))
+    print(json.dumps(import_sales(args.source, args.database, args.replace_sha256, args.replace_date)))

@@ -34,6 +34,37 @@ class DailySalesTests(unittest.TestCase):
                 restored = [json.loads(r[0]) for r in con.execute('SELECT raw_json FROM daily_sales_rows ORDER BY row_number')]
                 self.assertEqual(originals, restored)
 
+    def test_explicit_date_replacement_audit_and_rollback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db = Path(directory) / 'test.sqlite3'
+            import_pricebook(ROOT / 'data/pricebook.csv', db)
+            import_sales(ROOT / 'data/itemsales_by_day.csv', db)
+            incoming = ROOT / 'data/itemsales_aug12.csv'
+            with incoming.open(encoding='utf-8-sig', newline='') as f:
+                reader = csv.DictReader(f)
+                fields, rows = reader.fieldnames, list(reader)
+            bad = Path(directory) / 'bad.csv'
+            rows[-1]['Sales $'] = 'invalid'
+            with bad.open('w', newline='') as f:
+                writer = csv.DictWriter(f, fieldnames=fields)
+                writer.writeheader(); writer.writerows(rows)
+            with self.assertRaises(Exception):
+                import_sales(bad, db, replace_date='2026-08-12')
+            with sqlite3.connect(db) as con:
+                self.assertEqual(con.execute("SELECT count(*),sum(sales_cents) FROM daily_sales_rows WHERE sale_date='2026-08-12'").fetchone(), (21,14181))
+                self.assertEqual(con.execute('SELECT count(*) FROM sales_date_replacements').fetchone()[0], 0)
+            with self.assertRaisesRegex(ValueError, 'only the selected date'):
+                import_sales(incoming, db, replace_date='2026-08-13')
+            result = import_sales(incoming, db, replace_date='2026-08-12')
+            self.assertEqual(result['rows'], 668)
+            self.assertEqual(import_sales(incoming, db, replace_date='2026-08-12')['status'], 'already_imported')
+            with sqlite3.connect(db) as con:
+                self.assertEqual(con.execute("SELECT count(*),sum(sales_cents),sum(scan_sales_cents) FROM daily_sales_rows WHERE sale_date='2026-08-12'").fetchone(), (668,1046068,812351))
+                archived = json.loads(con.execute('SELECT previous_rows_json FROM sales_date_replacements').fetchone()[0])
+                self.assertEqual(len(archived), 21)
+                self.assertEqual(sum(r['sales_cents'] for r in archived), 14181)
+                self.assertEqual(con.execute('PRAGMA foreign_key_check').fetchall(), [])
+
     def test_september_october_export_formats(self):
         from decimal import Decimal
         from import_daily_sales import money, parse_date

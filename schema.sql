@@ -103,3 +103,11 @@ CREATE TABLE IF NOT EXISTS catalog_candidates (
  supplier_product_number TEXT NOT NULL,
  status TEXT NOT NULL DEFAULT 'Pending catalog setup', UNIQUE(review_id,line_number)
 );
+
+-- Preserve every replaced daily report row for explicit date corrections.
+CREATE TABLE IF NOT EXISTS sales_date_replacements (
+ id INTEGER PRIMARY KEY, sale_date TEXT NOT NULL,
+ replacement_import_id INTEGER NOT NULL REFERENCES imports(id),
+ previous_rows_json TEXT NOT NULL,
+ replaced_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
