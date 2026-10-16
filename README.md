@@ -469,3 +469,27 @@ from price-book stock and preserve earlier snapshots. A different file for an
 already occupied snapshot date is rejected to avoid counting the same date twice;
 replacing a saved snapshot is not supported. Uploads do not delete historical
 sales or invoices. CSV uploads are limited to 20 MB.
+
+### August sales gap filled (October 16 update)
+
+`data/itemsales_aug13_aug31.csv` adds 14,613 rows for **August 13–31, 2026**
+(19 dates), totaling **$227,951.72 Sales $** and **$217,815.15 Scan Sales**.
+14,298 rows match catalog UPCs exactly; 315 remain unlinked. January–April is
+still missing. The earlier notes describing the August gap are superseded.
+
+The unmodified supplied export is `data/itemsales_aug12_sep01_original.csv`.
+It includes six metadata lines and overlapping August 12 / September 1 dates.
+Only August 13–31 is imported; filtering and source hashes are recorded in
+`data/itemsales_aug13_aug31_provenance.json`. August 12 has 668 incoming rows
+versus 21 saved rows, with different values; September 1 has 12 incoming rows
+versus 595 saved. Both overlapping dates are retained unchanged pending review.
+August 12 and October 15 may be partial.
+
+After pulling on an existing installation, import the gap with:
+
+```powershell
+.\.venv\Scripts\python.exe import_daily_sales.py data/itemsales_aug13_aug31.csv
+```
+
+Restart Streamlit (or click Refresh data). Repeating this command is safe and
+will report `already_imported`. The cloud setup script also imports this file.

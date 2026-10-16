@@ -1,0 +1,15 @@
+{
+  "source": "itemsales_aug12_sep01_original.csv",
+  "source_sha256": "327d74cdd05ae4d6fa689d16732c2acd0be124ab25c88cdce3a845722743aeac",
+  "derived": "itemsales_aug13_aug31.csv",
+  "derived_sha256": "5fdcfa2c17f3686d3e346a7264c35bef8712f06b711cca08273598e20fb6485c",
+  "rows": 14613,
+  "from": "2026-08-13",
+  "to": "2026-08-31",
+  "sales_cents": 22795172,
+  "scan_sales_cents": 21781515,
+  "excluded_dates": {
+    "2026-08-12": "668 incoming rows overlap 21 saved rows; values differ. Retained existing data pending review.",
+    "2026-09-01": "12 incoming rows overlap 595 saved rows; retained existing data."
+  }
+}

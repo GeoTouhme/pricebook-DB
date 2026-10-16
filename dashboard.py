@@ -101,7 +101,10 @@ def search(frame,columns,key):
 
 if page == 'Overview':
     st.caption('Daily POS report · reported amounts, with unmatched and internal entries clearly separated')
-    st.warning('Coverage is incomplete: January–April and August 13–31 are missing. October 15 may be partial. Missing dates are not zero sales.')
+    coverage = sales_coverage(sales)
+    if not coverage.empty and coverage['Missing dates'].sum():
+        st.warning(f"Coverage is incomplete: {int(coverage['Missing dates'].sum())} dates are missing since January 1. See Data quality for monthly gaps. Missing dates are not zero sales.")
+    st.caption('August 12 and October 15 may be partial. Present dates do not prove complete daily sales.')
     current=dates(sales,'sale_date','sales_dates')
     departments=st.multiselect('Sales departments',
         [*SALES_DEPARTMENT_GROUPS, *sorted(sales.department.unique())])
