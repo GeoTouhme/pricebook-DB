@@ -514,3 +514,100 @@ requires a file containing only the explicitly selected date and runs atomically
 Every replaced row, including original source import IDs and raw source JSON, is
 preserved in `sales_date_replacements`. Other dates remain unchanged. Cloud setup
 runs the same correction. The previous August 12 partial-data warning is superseded.
+
+### Delivery platforms
+
+Open **Delivery platforms** in the sidebar. Expand **Upload platform reports**, select
+DoorDash ZIPs and Uber Eats CSV/XLSX reports together, inspect the preview, confirm,
+and choose **Save platform reports**. Saving creates a SQLite backup under
+`data/backups/`; the original documents and their provenance stay in the private
+database. No delivery source is added to POS sales, purchases, catalog, or inventory.
+
+Run locally with the existing environment:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.lock.txt
+.\.venv\Scripts\python.exe -m streamlit run dashboard.py
+```
+
+On Ubuntu, from the repository directory:
+
+```bash
+git pull
+source .venv/bin/activate
+python -m pip install -r requirements.lock.txt
+python -m streamlit run dashboard.py --server.address 0.0.0.0 --server.port 8501
+```
+
+Original platform reports are private and are not included in Git. Upload them on
+the new server through this page, or migrate the existing SQLite database while
+both applications are stopped. Delivery tables are initialized on the first save.
+
+The initial period is the observed overlap of the two platforms' operational order
+reports. For the supplied October reports, this is **October 1–14, 2026** in
+`America/Los_Angeles`. An observed row range does not prove full coverage. The upload
+preview displays declared coverage separately from actual local row bounds. Dates
+without rows are unknown; they are not synthesized as zero-sales days.
+
+- **Sales / orders / basket:** DoorDash sales-by-order and Uber order-history
+  completed orders, filtered by local placement date. Workflow IDs and normalized
+  DoorDash order IDs join financial data; short Uber order numbers are not join keys.
+- **DoorDash proceeds:** local transaction-date ledger net, excluding passed-through
+  tax and deposits. The waterfall keeps discounts, commission, marketing and
+  error/adjustment events. Payout statements use settlement dates separately.
+- **Uber proceeds:** completed placement-cohort financial payouts before date-based
+  ads and miscellaneous events. The Money tab separately shows these events and the
+  mixed-ledger arithmetic net. It preserves refunds and disputes on the same workflow
+  and flags unallocated miscellaneous fees. Proceeds are before product and operating
+  costs; they are not profit or confirmed bank cash.
+- **Products:** Uber uses item rows associated with the correct preceding financial
+  event header within each workflow, avoiding order/item double counting. DoorDash
+  product mix is aggregate source reporting over its full declared period, independent
+  of the page date filter, and may include canceled sales. Names and sizes are retained.
+- **Operations:** cancellations, failures, ratings with sample sizes, source-reported
+  unavailable items, and scheduled offline minutes. Event-pause durations are not
+  scheduled downtime. Accuracy-workbook counts and refund allocations remain
+  source-specific when they contradict CSVs. Header-only reports mean no supplied
+  metric, rather than proof of zero activity.
+
+Source mapping: DoorDash detailed financial transactions are canonical; simplified
+transactions and error/adjustment exports are provenance-only copies. Sales, payout,
+product, promotion, wait, cancellation, and error reports remain separate facts.
+Uber order-only detailed finance is canonical for money, mixed finance provides
+items, order history provides operational counts, and payout summaries are separate.
+Upload both Uber detailed finance and order history for complete comparisons; the
+mixed item report alone does not replace the detailed financial ledger. XLSX is read
+as an actual workbook using Python's standard library, with no Excel dependency.
+
+Imports use Decimal arithmetic, bounded in-memory archives, and a transactional save.
+Repeated files, equivalent ZIP members, and overlapping identical order/event facts
+are idempotent. Conflicting revisions are blocked without overwriting saved data.
+Aggregate/support reports with overlapping periods and ambiguous revised Uber
+miscellaneous events require separate source review; there is no automatic revision
+replacement UI. Non-overlapping aggregate report periods may be imported, and the
+product chart labels its full source scope. Multiple stores are keyed separately in
+storage; the current page aggregates the uploaded stores within each platform.
+
+Reports and backups include personal data. Keep the database, backups, and original
+reports private; only sanitized synthetic fixtures belong in Git. Daily aggregates
+can be downloaded as CSV and the short HTML owner summary can be printed in a browser.
+
+Run synthetic and Streamlit tests:
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+To additionally validate the original private October reports without importing into
+the live database (a temporary database is used):
+
+```bash
+DELIVERY_REPORT_MANIFEST=/path/to/source_manifest.json python -m unittest discover -s tests -p 'test_delivery*.py' -v
+```
+
+The verified common cohort is DoorDash **74 orders / $2,669.45** and Uber
+**111 / $4,059.18**. Financial bridges are DoorDash **$2,160.29** excluding
+passed-through tax/deposits and Uber **$2,868.46** completed-order proceeds; Uber's
+explicit mixed-ledger result after other events is **$2,413.54**. The tests keep
+settlement statements, canceled sales, refund reversals, and unmatched date coverage
+separate from those comparisons.

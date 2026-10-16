@@ -10,6 +10,7 @@ ICONS = [
     '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 11h18m-12 5 2 2 4-4"/>',
     '<path d="M4 20V10m8 10V4m8 16v-7M2 20h20"/>',
     '<path d="M12 16V3m-5 5 5-5 5 5M4 15v6h16v-6"/>',
+    '<path d="M2 5h12v12H2zM14 9h4l4 4v4h-8M5 17a2 2 0 1 0 4 0m8 0a2 2 0 1 0 4 0"/>',
 ]
 
 
