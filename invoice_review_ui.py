@@ -102,11 +102,17 @@ def render_invoice_review(database=None):
         defaults.update(extracted.get('header',{}))
         source_info=defaults.get('source_info',{})
         if source_info.get('excluded_lines'):
-            with st.expander('Excluded: unfulfilled and not charged',expanded=True):
+            with st.expander('Excluded: not shipped or charged',expanded=True):
                 st.dataframe(pd.DataFrame(source_info['excluded_lines']),hide_index=True,width='stretch')
         if source_info.get('barcode_details'):
-            with st.expander('Supplier barcode decoding and per-each reference prices'):
+            with st.expander('Supplier UPC details, source quantities and reference prices'):
                 st.dataframe(pd.DataFrame(source_info['barcode_details']),hide_index=True,width='stretch')
+        if source_info.get('invoice_charges'):
+            charges=source_info['invoice_charges']
+            st.caption('Merchandise: $'+source_info['merchandise_total']+
+                ' · Invoice-level CRV: $'+charges.get('crv_tax','not read')+
+                ' · Sweetener tax: $'+charges.get('sweetener_tax','not read')+
+                '. These charges are separate from product lines; review the totals difference before saving.')
         raw_lines=extracted['lines'] or [blank_line()]
         st.download_button('Download original PDF',payload,uploaded.name,'application/pdf')
         if st.checkbox('Show PDF beside the review'):

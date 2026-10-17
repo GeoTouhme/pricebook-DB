@@ -402,6 +402,28 @@ and database errors are reported explicitly; they do not produce a success recei
 Previously reviewed invoices and their original documents remain available from
 the database after a browser/session restart.
 
+### Breakthru California invoices
+
+New Items Review recognizes Breakthru Beverage California **BBCA XML Final Invoice**
+PDFs. It prefills invoice dates, due dates, the supplier account and printed totals.
+Cases (`CA`) and loose bottles (`BO`) retain their source quantities and unit prices;
+BPC remains a supplier bottles-per-case reference. The original size, pieces,
+net prices and printed barcode digits remain in the source-details expander.
+Review the retail PACK UPC for multipacks; BPC is not a retail pack conversion.
+
+The printed UPC-A digits are joined across their separate PDF baselines and checked
+before proposing a 12-digit PACK UPC. Invalid or ambiguous barcodes stay blank and
+require review; no CASE UPC or guessed digit is substituted. Wrapped descriptions
+and leading zeros are preserved. Zero-quantity out-of-stock lines are excluded from
+purchases and new-item checks. Mixed case/bottle rows require manual unit review.
+
+CRV and sweetener taxes remain invoice-level source charges, separate from product
+lines. The printed invoice total is preserved; saving requires the existing explicit
+acknowledgement of any difference from merchandise totals. A Breakthru PDF is also
+checked against existing supplier-account invoice numbers with leading zeros ignored,
+so a prior Fintech export cannot be re-added because of different display labels.
+Original PDFs are retained only after the user reviews and saves the invoice.
+
 ### Mercaso invoices
 
 New Items Review also recognizes the Mercaso invoice layout. Update dependencies
