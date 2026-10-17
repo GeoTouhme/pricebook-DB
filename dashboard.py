@@ -37,7 +37,7 @@ data = cached_data(DATABASE.stat().st_mtime_ns)
 sales, products, inventory, invoices, lines = [data[k] for k in
     ['sales','products','inventory','invoices','purchase_lines']]
 
-navigation = ['Overview', 'Products', 'Inventory', 'Purchases',
+navigation = ['Overview', 'Products', 'Inventory', 'Purchases', 'Invoice lookup',
               'New Items Review', 'Data quality', 'Data imports', 'Delivery platforms']
 
 
@@ -212,6 +212,10 @@ elif page == 'Purchases':
                 st.success('Invoice totals and exact decimal line sums agree for these documents.')
             else:
                 table(flagged,'Download reconciliation flags','reconciliation')
+
+elif page == 'Invoice lookup':
+    from invoice_lookup_ui import render_invoice_lookup
+    render_invoice_lookup(products, lines, invoices)
 
 elif page == 'Delivery platforms':
     from delivery_ui import render_delivery

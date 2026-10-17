@@ -71,7 +71,7 @@ def require_login():
     username = session.get('username')
     if (username in users and session.get('credential') == users[username]
             and time.time() < session.get('expires', 0)):
-        st.sidebar.button('Sign out', on_click=logout, key='sign_out')
+        st.sidebar.button('Sign out', icon=':material/logout:', on_click=logout, key='sign_out')
         return username
     if session:
         logout()

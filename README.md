@@ -663,3 +663,22 @@ passed-through tax/deposits and Uber **$2,868.46** completed-order proceeds; Ube
 explicit mixed-ledger result after other events is **$2,413.54**. The tests keep
 settlement statements, canceled sales, refund reversals, and unmatched date coverage
 separate from those comparisons.
+
+### Product invoice lookup
+
+Open **Invoice lookup** to search by product name, retail UPC, or supplier item
+code. The search includes unlinked supplier items and keeps pack variants separate.
+Padded PACK UPCs are normalized for lookup; CASE UPC is never substituted, and
+confirmed manual catalog mappings take precedence over a conflicting raw barcode.
+
+Select a product to compare the price-book selling price and source cost with its
+invoice history. Price-book prices/costs display their quantity basis (for example,
+$33.30 for two catalog units is $16.65 per unit). Invoice prices retain CA/BO and
+source PPC/BPC; the page does not assume that bottles-per-case equals retail packs.
+Credits remain in the net line total, and the latest-purchase card skips return
+lines. Filter by invoice dates/supplier, inspect the full invoice, download the
+filtered product history, or view source prices for one supplier/unit/pack at a time.
+
+A product can exist in the catalog without a matching imported invoice. Missing
+history is stated explicitly and is not evidence that the product was never bought.
+The page reads existing data and does not update costs, stock, or product links.
