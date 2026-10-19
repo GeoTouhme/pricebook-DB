@@ -402,6 +402,31 @@ and database errors are reported explicitly; they do not produce a success recei
 Previously reviewed invoices and their original documents remain available from
 the database after a browser/session restart.
 
+### Southern Glazer's California invoices
+
+New Items Review recognizes the Southern Glazers Wine and Spirits of California
+South layout across its merchandise and terms pages. Upload the complete PDF in
+page order. Missing, duplicated, reordered, or mixed-invoice pages are rejected.
+Invoice date, account, due date and the printed **TOTAL NET AMOUNT** are prefilled;
+**PAY THIS AMOUNT** is retained separately as a source reference.
+
+Only delivered quantities from **CS ORD/DLV** and **BTLS ORD/DLV** become purchase
+quantities. Per-bottle reference prices beneath each item are not separate lines.
+Case/bottle units and source BPC are preserved. Ordered-but-undelivered, backordered,
+and otherwise uncharged zero-delivery items are excluded from purchases and
+new-item matching. Mixed case/bottle rows require manual quantity/unit review.
+
+Hyphenated item UPCs are normalized to 12-digit PACK UPCs and their check digits
+are validated. A nonzero-prefix 13-digit barcode is retained in source details and
+left blank for manual retail-UPC review; it is never truncated. CASE UPC is not a
+fallback. A charged delivery-fee row is stored as an invoice-level source charge,
+not a new catalog item. CRV uses the **printed total CRV**, rather than recalculating
+it from reference unit rates. Product line totals retain their printed merchandise
+amounts, so saving requires acknowledgement of the documented CRV/delivery gap.
+Source details, promotions, charge rows, rejected items and the original PDF remain
+in the reviewed-invoice audit. Duplicate checks also compare normalized supplier
+account/invoice identifiers against prior Fintech imports.
+
 ### Breakthru California invoices
 
 New Items Review recognizes Breakthru Beverage California **BBCA XML Final Invoice**

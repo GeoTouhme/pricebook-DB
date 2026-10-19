@@ -109,10 +109,13 @@ def render_invoice_review(database=None):
                 st.dataframe(pd.DataFrame(source_info['barcode_details']),hide_index=True,width='stretch')
         if source_info.get('invoice_charges'):
             charges=source_info['invoice_charges']
-            st.caption('Merchandise: $'+source_info['merchandise_total']+
-                ' · Invoice-level CRV: $'+charges.get('crv_tax','not read')+
-                ' · Sweetener tax: $'+charges.get('sweetener_tax','not read')+
+            labels={'crv_tax':'Invoice-level CRV','sweetener_tax':'Sweetener tax','delivery_charge':'Delivery charge'}
+            summary=' · '.join(labels.get(field,field)+': $'+str(value) for field,value in charges.items())
+            st.caption('Merchandise: $'+source_info['merchandise_total']+' · '+summary+
                 '. These charges are separate from product lines; review the totals difference before saving.')
+        if source_info.get('charge_lines'):
+            with st.expander('Invoice fees — excluded from product matching'):
+                st.dataframe(pd.DataFrame(source_info['charge_lines']),hide_index=True,width='stretch')
         raw_lines=extracted['lines'] or [blank_line()]
         st.download_button('Download original PDF',payload,uploaded.name,'application/pdf')
         if st.checkbox('Show PDF beside the review'):

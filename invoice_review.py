@@ -20,7 +20,7 @@ LINE_FIELDS = ['product_number','upc','description','quantity','unit_cost',
 CSV_FIELDS = dict(zip(LINE_FIELDS, ['Product Number','UPC Number','Product Description',
     'Quantity','Unit Cost','Unit of Measure','PPC','Pack UPC','Total Adjustments',
     'Total Discount','Extended Price']))
-EXTRACTION_VERSION = 6
+EXTRACTION_VERSION = 7
 ACTIONS = ['Review needed','Link existing product','Confirm new item','Keep unlinked']
 
 
@@ -98,6 +98,9 @@ def _extract_document(payload, filename):
     with pdfplumber.open(io.BytesIO(payload)) as pdf:
         if len(pdf.pages)>100:
             raise ValueError('Upload at most 100 pages at a time')
+        from southern_glazers_pdf import extract_invoice as extract_southern
+        supplier_result=extract_southern(pdf)
+        if supplier_result is not None:return supplier_result
         from breakthru_pdf import extract_invoice as extract_breakthru
         supplier_result=extract_breakthru(pdf)
         if supplier_result is not None:return supplier_result
@@ -356,16 +359,16 @@ def save_review(payload,filename,header,decisions,acknowledge_difference=False,d
             AND store_id=? AND invoice_number=? AND invoice_date=?''',
             (supplier,header['retailer'],header['store_id'],header['invoice_number'],header['invoice_date'])).fetchone():
             raise ValueError('Invoice number, supplier, date and store already exist; review the existing invoice')
-        # Breakthru PDFs and Fintech exports use different store display names,
-        # and the export pads invoice/account numbers with zeros. Match the
+        # Supplier PDFs and Fintech exports use different store display names,
+        # and exports pad invoice/account numbers with zeros. Match the
         # supplier account and printed invoice identity across those formats.
-        if (header.get('source_info',{}).get('supplier_format')=='Breakthru California'
+        if (header.get('source_info',{}).get('supplier_format') in {'Breakthru California','Southern Glazers California'}
                 and db.execute('''SELECT 1 FROM purchase_invoices WHERE supplier_id=?
                     AND ltrim(invoice_number,'0')=? AND invoice_date=?
                     AND ltrim(customer_id,'0')=?''',
                     (supplier,header['invoice_number'].lstrip('0'),header['invoice_date'],
                      header.get('customer_id','').lstrip('0'))).fetchone()):
-            raise ValueError('This Breakthru invoice is already in purchases under its supplier account; review the existing invoice')
+            raise ValueError('This supplier invoice is already in purchases under its supplier account; review the existing invoice')
         if db.execute('SELECT 1 FROM imports WHERE sha256=?',(digest,)).fetchone():
             raise ValueError('This source file was already imported')
         batch=db.execute('INSERT INTO imports(source_name,sha256,row_count) VALUES (?,?,?)',
