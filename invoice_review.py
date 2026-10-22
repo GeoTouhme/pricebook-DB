@@ -20,7 +20,7 @@ LINE_FIELDS = ['product_number','upc','description','quantity','unit_cost',
 CSV_FIELDS = dict(zip(LINE_FIELDS, ['Product Number','UPC Number','Product Description',
     'Quantity','Unit Cost','Unit of Measure','PPC','Pack UPC','Total Adjustments',
     'Total Discount','Extended Price']))
-EXTRACTION_VERSION = 7
+EXTRACTION_VERSION = 8
 ACTIONS = ['Review needed','Link existing product','Confirm new item','Keep unlinked']
 
 
@@ -59,17 +59,28 @@ def extract_document(payload, filename):
     if not _PDF_SLOTS.acquire(blocking=False):
         raise ValueError('Another PDF is being processed. Try again shortly.')
     try:
-        env = dict(os.environ, OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1')
-        completed = subprocess.run([sys.executable, str(Path(__file__).with_name('pdf_worker.py'))],
-            input=payload, capture_output=True, timeout=60, env=env)
-        if completed.returncode:
-            raise ValueError('PDF exceeded processing limits or could not be read. Try a smaller PDF.')
-        result = json.loads(completed.stdout)
-        if 'error' in result:
-            raise ValueError(result['error'])
-        return result['result']
-    except subprocess.TimeoutExpired as exc:
-        raise ValueError('PDF processing exceeded 60 seconds. Split the document and try again.') from exc
+        import tempfile
+        import signal
+        with tempfile.TemporaryDirectory(prefix='pricebook-pdf-') as folder:
+            env = dict(os.environ, OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1',
+                       PRICEBOOK_PDF_WORKDIR=folder)
+            worker = subprocess.Popen([sys.executable, str(Path(__file__).with_name('pdf_worker.py'))],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                start_new_session=os.name=='posix', env=env)
+            try:
+                output, _ = worker.communicate(payload, timeout=180)
+            except subprocess.TimeoutExpired as exc:
+                if os.name=='posix':
+                    try:os.killpg(worker.pid, signal.SIGKILL)
+                    except ProcessLookupError:pass
+                else:worker.kill()
+                worker.communicate()
+                raise ValueError('PDF processing exceeded 180 seconds. Split the document and try again.') from exc
+            if worker.returncode:
+                raise ValueError('PDF exceeded processing limits or could not be read. Try a smaller PDF.')
+            result = json.loads(output)
+            if 'error' in result:raise ValueError(result['error'])
+            return result['result']
     finally:
         _PDF_SLOTS.release()
 
@@ -98,6 +109,10 @@ def _extract_document(payload, filename):
     with pdfplumber.open(io.BytesIO(payload)) as pdf:
         if len(pdf.pages)>100:
             raise ValueError('Upload at most 100 pages at a time')
+        from scan_ocr import scan_page, ocr_pages
+        if any(scan_page(page) for page in pdf.pages):
+            from scanned_receipts import parse_scans
+            return parse_scans(ocr_pages(pdf))
         from southern_glazers_pdf import extract_invoice as extract_southern
         supplier_result=extract_southern(pdf)
         if supplier_result is not None:return supplier_result
@@ -278,6 +293,13 @@ def decimal_text(value,field):
 
 
 def validate_review(header,lines):
+    info=header.get('source_info',{})
+    if info.get('document_status')=='reference_only':
+        raise ValueError('A pick list is not an invoice and cannot be saved as a purchase')
+    if info.get('ocr') and not header.get('ocr_reviewed'):
+        raise ValueError('Verify the OCR values against the original before matching or saving')
+    if info.get('document_status')=='preliminary' and not header.get('preliminary_confirmed'):
+        raise ValueError('Confirm this preliminary document reflects the final charged purchase')
     for field in ['supplier','retailer','store_id','invoice_number','invoice_date','invoice_total']:
         if not str(header.get(field,'')).strip():raise ValueError(f'Missing {field}')
     date.fromisoformat(header['invoice_date'])
@@ -297,6 +319,10 @@ def validate_review(header,lines):
         if not row['unit_of_measure']:raise ValueError(f'Line {index}: unit of measure is required')
         if row['ppc'] and Decimal(decimal_text(row['ppc'],'PPC'))<0:raise ValueError('PPC cannot be negative')
         row['upc']=pack_upc_or_blank(row['pack_upc'])
+        if info.get('ocr'):
+            expected=Decimal(row['quantity'])*Decimal(row['unit_cost'])+Decimal(row['discount'])+Decimal(row['adjustments'])
+            if abs(expected-Decimal(row['extended_price']))>Decimal('0.01'):
+                raise ValueError(f'Line {index}: quantity, price, discounts and adjustments do not reconcile to the line total')
         normalized.append(row)
     difference=Decimal(total)/100-sum(Decimal(r['extended_price']) for r in normalized)
     return normalized,difference
@@ -362,7 +388,7 @@ def save_review(payload,filename,header,decisions,acknowledge_difference=False,d
         # Supplier PDFs and Fintech exports use different store display names,
         # and exports pad invoice/account numbers with zeros. Match the
         # supplier account and printed invoice identity across those formats.
-        if (header.get('source_info',{}).get('supplier_format') in {'Breakthru California','Southern Glazers California'}
+        if (header.get('source_info',{}).get('supplier_format') in {'Breakthru California','Southern Glazers California','Straub scan','Sunset scan','Pepsi scan'}
                 and db.execute('''SELECT 1 FROM purchase_invoices WHERE supplier_id=?
                     AND ltrim(invoice_number,'0')=? AND invoice_date=?
                     AND ltrim(customer_id,'0')=?''',

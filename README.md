@@ -301,11 +301,11 @@ credentials. It recognizes ruled tables with identifiable description, quantity,
 and amount headers, plus the Fintech invoice-report layout with a ruled header
 and unruled, wrapped item rows. That layout is regression-tested against the
 supplied seven-line Breakthru invoice. Other layouts can require manual entry
-and verification. Scanned/image-only PDFs
-need manual entry or a Fintech CSV; OCR is not configured. Every PDF extraction is
+and verification. Scanned/image-only PDFs use local Tesseract OCR when installed
+(see scanned paper invoices below); unclear fields still need manual entry. Every PDF extraction is
 an editable draft, including codes, prices, pack sizes, and totals. A preview can
 show the PDF and extracted text. Uploaded files are limited to 20 MB and PDFs to
-100 pages. No document content is executed.
+100 pages for text PDFs, or 5 pages for scanned/mixed PDFs. No document content is executed.
 
 Name similarity, pack barcodes, and historical supplier links are suggestions;
 only an exact normalized PACK UPC or an explicitly remembered supplier/pack mapping is
@@ -707,3 +707,46 @@ filtered product history, or view source prices for one supplier/unit/pack at a 
 A product can exist in the catalog without a matching imported invoice. Missing
 history is stated explicitly and is not evidence that the product was never bought.
 The page reads existing data and does not update costs, stock, or product links.
+
+
+### Scanned paper invoices (CamScanner)
+
+On the Ubuntu server, install the native OCR engine once, then restart Streamlit:
+
+```bash
+sudo apt update
+sudo apt install -y tesseract-ocr tesseract-ocr-eng tesseract-ocr-osd
+tesseract --list-langs
+```
+
+Upload the original scanned PDF in **New Items Review**. Processing stays on your
+server; there is no external OCR service or API key. Scans are limited to 20 MB,
+5 pages and 20 megapixels per working image, with a 180-second document timeout.
+Sideways pages are rotated when orientation detection is sufficiently confident.
+Low resolution, folds and curved thermal receipts still cause errors.
+
+Straub, Sunset and Pepsi receipt layouts produce editable drafts. Straub and
+Sunset currently accept one receipt page per upload; multi-page Pepsi documents
+are supported within the scan limits. Verify **every
+line**, including omissions, against the original PDF before checking for new
+items. Unreadable fields remain blank; monetary decimal points and damaged UPC
+digits are not repaired. A printed UPC requires agreement between two OCR passes
+and a valid check digit; independently decoded product barcodes are shown with
+provenance. Only a 12-digit normalized PACK UPC is used for matching, never CASE UPC.
+Verification is still required because OCR can consistently misread a number.
+
+Sunset pick sheets marked **NOT A FINAL INVOICE** require confirmation that the
+reviewed document reflects the final charged purchase. Zero-delivery/out-of-stock
+rows are excluded. Pepsi **NOT AN INVOICE** product pick lists allow a read-only
+catalog comparison and cannot be saved as purchases. The actual Pepsi invoice
+uses net case prices and separate state/local charges. Straub payment and balance
+figures, and a previous receipt fragment, are not treated as the current total.
+Missing invoice identity or conflicting totals require manual correction.
+
+For scanned invoices the review checkbox and line arithmetic are checked again
+by the save function. Quantity × price + signed discounts + adjustments must
+reconcile to each line total. Invoice-level fees remain separate and any overall
+difference still requires the existing acknowledgement. The original PDF and
+review confirmations are retained in the audit record only after a reviewed save.
+Unknown scan layouts provide OCR text for manual entry rather than invented rows.
+On Windows, install Tesseract with English/OSD data and add its executable to PATH.

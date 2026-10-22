@@ -109,7 +109,15 @@ class SecurityTests(unittest.TestCase):
     def test_pdf_timeout_and_worker_failure(self):
         import subprocess
         from invoice_review import extract_document
-        with patch('subprocess.run', side_effect=subprocess.TimeoutExpired('worker',60)):
-            with self.assertRaisesRegex(ValueError, '60 seconds'):
+        from unittest.mock import MagicMock
+        worker=MagicMock()
+        worker.pid=12345
+        worker.communicate.side_effect=[subprocess.TimeoutExpired('worker',180),(b'',b'')]
+        with patch('subprocess.Popen',return_value=worker), patch('os.killpg') as kill:
+            with self.assertRaisesRegex(ValueError, '180 seconds'):
                 extract_document(b'%PDF-invalid', 'test.pdf')
+            import os
+            if os.name=='posix':kill.assert_called_once()
+            else:worker.kill.assert_called_once()
+            self.assertEqual(worker.communicate.call_count,2)
         with self.assertRaises(ValueError): extract_document(b'%PDF-invalid', 'test.pdf')

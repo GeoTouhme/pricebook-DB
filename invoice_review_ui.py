@@ -47,7 +47,7 @@ def render_invoice_review(database=None):
         st.caption('Last successful save')
         show_saved_receipt(receipt)
     uploaded=st.file_uploader('Upload an invoice PDF or Fintech CSV',type=['pdf','csv'],
-        help='PDF or Fintech CSV, up to 20 MB.')
+        help='PDF or Fintech CSV, up to 20 MB. Scanned PDFs: up to 5 pages; local OCR requires Tesseract.')
     with st.expander('Confirmed new items awaiting catalog setup'):
         pending=pending_items(database)
         if pending.empty:st.info('No confirmed new items yet.')
@@ -74,7 +74,9 @@ def render_invoice_review(database=None):
     digest=hashlib.sha256(payload).hexdigest()
     document_key=f'{digest}:{EXTRACTION_VERSION}'
     if st.session_state.get('review_document')!=document_key:
-        try:extracted=extract_document(payload,uploaded.name)
+        try:
+            with st.spinner('Reading document… Scanned PDFs can take up to three minutes.'):
+                extracted=extract_document(payload,uploaded.name)
         except Exception as exc:
             st.error(f'Could not read this document: {exc}')
             return
@@ -111,7 +113,8 @@ def render_invoice_review(database=None):
             charges=source_info['invoice_charges']
             labels={'crv_tax':'Invoice-level CRV','sweetener_tax':'Sweetener tax','delivery_charge':'Delivery charge'}
             summary=' · '.join(labels.get(field,field)+': $'+str(value) for field,value in charges.items())
-            st.caption('Merchandise: $'+source_info['merchandise_total']+' · '+summary+
+            merchandise=source_info['merchandise_total']
+            st.caption('Merchandise: '+(merchandise if merchandise=='not fully read' else '$'+merchandise)+' · '+summary+
                 '. These charges are separate from product lines; review the totals difference before saving.')
         if source_info.get('charge_lines'):
             with st.expander('Invoice fees — excluded from product matching'):
@@ -124,6 +127,20 @@ def render_invoice_review(database=None):
             st.markdown(f'<iframe src="data:application/pdf;base64,{encoded}" width="100%" height="550"></iframe>',unsafe_allow_html=True)
         with st.expander('Extracted text'):
             st.text(extracted['text'] or 'No readable text found.')
+    info=defaults.get('source_info',{})
+    if info.get('document_status')=='reference_only':
+        st.subheader('Pick list — catalog check only')
+        st.caption('This document contains no purchase prices. Review the scanned names and PACK UPCs before comparing items.')
+        st.dataframe(pd.DataFrame(raw_lines),hide_index=True,width='stretch')
+        checked=st.checkbox('I checked the scanned product names and PACK UPCs',key=f'{token}_reference_checked')
+        if st.button('Check pick list items',disabled=not checked):
+            st.session_state.pick_list_preview={'token':token,'rows':classify_lines(raw_lines,defaults['supplier'],database)}
+        preview=st.session_state.get('pick_list_preview')
+        if checked and preview and preview['token']==token:
+            result=pd.DataFrame(preview['rows'])
+            st.dataframe(result[['description','upc','status','reason','suggestions']],hide_index=True,width='stretch')
+            st.download_button('Download pick list matches',csv_bytes(result),'pick_list_matches.csv','text/csv')
+        return
     if receipt and receipt['token']==token:
         st.info('This invoice is saved. Open Purchases to see it, or choose a different invoice to continue.')
         return
@@ -168,8 +185,14 @@ def render_invoice_review(database=None):
     raw_records=edited.fillna('').to_dict('records')
     records=[r for r in raw_records if any(str(v).strip() for v in r.values())]
     for row in records:row['upc']=pack_upc_or_blank(row['pack_upc'])
+    if info.get('ocr'):
+        header['ocr_reviewed']=st.checkbox('I verified all OCR values against the original PDF',key=f'{token}_ocr_checked')
+    if info.get('document_status')=='preliminary':
+        header['preliminary_confirmed']=st.checkbox('I confirmed this preliminary document reflects the final charged purchase',key=f'{token}_preliminary_checked')
     signature=hashlib.sha256(json.dumps({'header':header,'lines':records},sort_keys=True).encode()).hexdigest()
-    if st.button('Check for new items',type='primary'):
+    needs_confirmation=(info.get('ocr') and not header.get('ocr_reviewed')) or (
+        info.get('document_status')=='preliminary' and not header.get('preliminary_confirmed'))
+    if st.button('Check for new items',type='primary',disabled=bool(needs_confirmation)):
         try:
             normalized,difference=validate_review(header,records)
             with st.spinner('Comparing catalog and purchase history…'):

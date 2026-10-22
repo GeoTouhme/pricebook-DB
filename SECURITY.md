@@ -27,7 +27,7 @@ For a normal shared web URL, deploy a TLS reverse proxy with authentication cove
 
 ## Uploads, exports, and backups
 
-- PDF extraction runs in a separate process with a 60-second wall timeout, one active PDF per app process, and on Linux a 45-second CPU / 2 GiB address-space limit. Inputs are at most 20 MiB / 100 pages. This is resource isolation, not an OS security sandbox.
+- PDF extraction runs in a separate process with a 180-second wall timeout, one active PDF per app process, and on Linux a 90-second CPU / 2 GiB address-space limit. Inputs are at most 20 MiB / 100 text pages. Scanned/mixed PDFs are capped at 5 pages / 20 megapixels per image, OCR uses one thread, and temporary files are removed after completion or timeout. The Linux per-file output limit is 64 MiB. On POSIX a timeout kills the entire PDF/OCR process group. This is resource isolation, not an OS security sandbox.
 - Delivery imports accept at most 20 files, 20 MiB per file, 50 MiB total, and 100 MiB expanded across the batch. Archive traversal/encryption checks still apply. These limits reduce resource abuse; authenticated administrators can still submit workloads or accumulate database storage over time.
 - CSV downloads prefix formula-leading text with an apostrophe. Numeric values and stored source data are preserved. Original uploaded document downloads remain originals and may contain spreadsheet formulas.
 - After successful catalog/snapshot/delivery saves, retain the latest 10 automatic `before-upload-*` / `before-delivery-*` backups combined. Manually named backups are untouched. Retention is count-based, not a disk quota; monitor disk use and keep separate off-server backups.
